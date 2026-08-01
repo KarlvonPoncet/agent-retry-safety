@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+try:
+    from streamlit.testing.v1 import AppTest
+except ImportError:  # Keep the browser-free suite usable without the UI extra.
+    AppTest = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +43,10 @@ class ResultNormalizationTests(unittest.TestCase):
 
         normalized = normalize_results(CoreResult())
         self.assertEqual(normalized["trials"][0]["trial"], 1)
-        self.assertEqual(normalized["policy_metrics"]["blind_retry"]["duplicate_rate"], 0.25)
+        self.assertEqual(
+            normalized["policy_metrics"]["blind_retry"]["duplicate_rate"],
+            0.25,
+        )
         self.assertEqual(normalized["summary"]["response_loss_rate"], 1.0)
 
     def test_tuple_and_mapping_records_are_supported(self) -> None:
@@ -50,7 +58,10 @@ class ResultNormalizationTests(unittest.TestCase):
         )
         self.assertEqual(len(normalized["trials"]), 1)
         self.assertEqual(normalized["trials"][0]["trial_id"], "trial-a")
-        self.assertEqual(normalized["policy_metrics"]["no_retry"]["final_state_correctness"], 0.5)
+        self.assertEqual(
+            normalized["policy_metrics"]["no_retry"]["final_state_correctness"],
+            0.5,
+        )
 
     def test_transposed_metric_table_is_supported(self) -> None:
         normalized = normalize_results(
@@ -88,7 +99,9 @@ class LabelsAndFormattingTests(unittest.TestCase):
         self.assertEqual(policy_label("status-before-retry"), "Status-before-retry")
         self.assertEqual(policy_label("idempotency_key"), "Idempotency key")
 
-    def test_metric_formatting_handles_fractions_counts_and_missing_values(self) -> None:
+    def test_metric_formatting_handles_fractions_counts_and_missing_values(
+        self,
+    ) -> None:
         self.assertEqual(format_metric(0.875, "final_state_correctness"), "87.5%")
         self.assertEqual(format_metric(3, "retry_count"), "3")
         self.assertEqual(format_metric(None), "—")
@@ -103,6 +116,15 @@ class ImportBehaviorTests(unittest.TestCase):
         self.assertTrue(is_demo)
         self.assertEqual(len(results["trials"]), 2)
 
+    @unittest.skipIf(AppTest is None, "Streamlit UI extra is not installed")
+    def test_streamlit_app_smoke(self) -> None:
+        app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30)
+        app.run()
+        self.assertFalse(list(app.exception))
+        self.assertIn("Policy comparison", [item.value for item in app.subheader])
+        self.assertIn("Failure timeline", [item.value for item in app.subheader])
+        self.assertIn("Run experiment", [item.label for item in app.button])
+
     def test_importable_core_contract_is_used(self) -> None:
         calls = []
 
@@ -112,18 +134,22 @@ class ImportBehaviorTests(unittest.TestCase):
                 *,
                 seed,
                 trials,
-                tool_types,
-                failure_timing,
-                failure_rate,
-                selected_policies,
+                failure_probability,
+                failure_phases,
+                include_no_failure,
+                max_attempts,
+                tool_kinds,
+                policies,
             ):
                 self.values = {
                     "seed": seed,
                     "trials": trials,
-                    "tool_types": tool_types,
-                    "failure_timing": failure_timing,
-                    "failure_rate": failure_rate,
-                    "selected_policies": selected_policies,
+                    "failure_probability": failure_probability,
+                    "failure_phases": failure_phases,
+                    "include_no_failure": include_no_failure,
+                    "max_attempts": max_attempts,
+                    "tool_kinds": tool_kinds,
+                    "policies": policies,
                 }
 
         def run_experiment(config):
@@ -143,16 +169,21 @@ class ImportBehaviorTests(unittest.TestCase):
                 DashboardSettings(
                     seed=9,
                     trials=1,
-                    tool_type="email_send",
+                    tool_type="non_idempotent_mutation",
                     failure_timing="before_commit",
                     failure_rate=0.2,
                     policies=("no_retry",),
                 )
             )
         self.assertFalse(is_demo)
-        self.assertEqual(calls[0]["tool_types"], ["email_send"])
-        self.assertEqual(calls[0]["selected_policies"], ["no_retry"])
-        self.assertEqual(results["policy_metrics"]["no_retry"]["final_state_correctness"], 1.0)
+        self.assertEqual(calls[0]["tool_kinds"], ["non_idempotent_mutation"])
+        self.assertEqual(calls[0]["failure_probability"], 0.2)
+        self.assertEqual(calls[0]["failure_phases"], ["before_commit"])
+        self.assertEqual(calls[0]["policies"], ["no_retry"])
+        self.assertEqual(
+            results["policy_metrics"]["no_retry"]["final_state_correctness"],
+            1.0,
+        )
 
 
 if __name__ == "__main__":

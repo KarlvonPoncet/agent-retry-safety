@@ -1,11 +1,11 @@
 """Streamlit dashboard for the retry-safety educational experiment."""
 
 from .dashboard import (
-    DashboardSettings,
     METRIC_LABELS,
     POLICY_LABELS,
     POLICY_OPTIONS,
     TOOL_OPTIONS,
+    DashboardSettings,
     build_demo_results,
     format_metric,
     main,

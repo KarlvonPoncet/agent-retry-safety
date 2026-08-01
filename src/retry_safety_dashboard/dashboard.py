@@ -6,37 +6,40 @@ lets ``app.py`` provide a clear error when somebody runs the UI without the
 optional Streamlit dependency installed.
 """
 
+# Embedded HTML/CSS intentionally uses long readable lines.
+# ruff: noqa: E501
+
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
-from html import escape
 import importlib
 import inspect
 import math
 import random
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from html import escape
 from typing import Any
 
-
+# These values intentionally mirror the public core enums. The labels remain
+# plain language so the UI teaches the concept rather than the Python spelling.
 POLICY_OPTIONS = (
     "blind_retry",
     "status_before_retry",
-    "idempotency_key",
+    "idempotency_key_retry",
     "no_retry",
 )
 
 POLICY_LABELS = {
     "blind_retry": "Blind retry",
     "status_before_retry": "Status-before-retry",
-    "idempotency_key": "Idempotency key",
+    "idempotency_key_retry": "Idempotency key",
     "no_retry": "No retry",
 }
 
 TOOL_OPTIONS = (
-    "database_write",
-    "email_send",
-    "payment_charge",
-    "file_write",
+    "non_idempotent_mutation",
+    "idempotent_mutation",
+    "read_only",
 )
 
 FAILURE_TIMINGS = (
@@ -77,7 +80,7 @@ class DashboardSettings:
 
     @property
     def tool_types(self) -> tuple[str, ...]:
-        """Return the selected tool in the plural form used by the core API."""
+        """Return the selected tool in a collection for the core config."""
 
         return (self.tool_type,)
 
@@ -87,16 +90,25 @@ class DashboardSettings:
 
         return self.policies
 
-    def validated(self) -> "DashboardSettings":
+    def validated(self) -> DashboardSettings:
         """Return a bounded copy suitable for either the demo or core runner."""
 
         policies = tuple(
-            policy for policy in self.policies if policy in POLICY_OPTIONS
+            canonical
+            for canonical in (_canonical_policy(policy) for policy in self.policies)
+            if canonical in POLICY_OPTIONS
         )
+        tool_aliases = {
+            "database_write": "non_idempotent_mutation",
+            "email_send": "non_idempotent_mutation",
+            "payment_charge": "non_idempotent_mutation",
+            "file_write": "non_idempotent_mutation",
+        }
+        tool_type = tool_aliases.get(self.tool_type, self.tool_type)
         return DashboardSettings(
             seed=int(self.seed),
-            trials=max(0, min(int(self.trials), 100_000)),
-            tool_type=(self.tool_type if self.tool_type in TOOL_OPTIONS else TOOL_OPTIONS[0]),
+            trials=max(1, min(int(self.trials), 100_000)),
+            tool_type=(tool_type if tool_type in TOOL_OPTIONS else TOOL_OPTIONS[0]),
             failure_timing=(
                 self.failure_timing
                 if self.failure_timing in FAILURE_TIMINGS
@@ -116,9 +128,10 @@ def _canonical_policy(policy: Any) -> str:
         "status_check": "status_before_retry",
         "status_before_retries": "status_before_retry",
         "status_before_retry_policy": "status_before_retry",
-        "idempotency": "idempotency_key",
-        "idempotency_keys": "idempotency_key",
-        "idempotent_retry": "idempotency_key",
+        "idempotency": "idempotency_key_retry",
+        "idempotency_key": "idempotency_key_retry",
+        "idempotency_keys": "idempotency_key_retry",
+        "idempotent_retry": "idempotency_key_retry",
         "never_retry": "no_retry",
         "none": "no_retry",
     }
@@ -235,6 +248,121 @@ def _records_from(value: Any) -> list[dict[str, Any]]:
     return [{"value": _jsonish(value), "trial_id": 1}]
 
 
+def _adapt_trial_record(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Add renderer-friendly fields to a serialized core trial row."""
+
+    row = dict(record)
+    trace = [
+        event for event in row.get("trace", []) if isinstance(event, Mapping)
+    ]
+    ambiguous = any(bool(event.get("ambiguous")) for event in trace)
+    committed = any(bool(event.get("committed")) for event in trace)
+    status_reads = row.get("status_reads", 0)
+    retries = row.get("retries", 0)
+    duplicate_count = row.get("duplicate_side_effects", 0)
+    failure_injected = bool(row.get("failure_injected", False))
+    response_lost = row.get("response_lost")
+    if response_lost is None:
+        response_lost = ambiguous
+    mutation_committed = row.get("mutation_committed")
+    if mutation_committed is None:
+        mutation_committed = committed
+    row.setdefault("failure_occurred", failure_injected)
+    row.setdefault("mutation_committed", bool(mutation_committed))
+    row.setdefault("response_lost", bool(response_lost))
+    row.setdefault("response_delivered", not bool(response_lost))
+    row.setdefault("agent_observed_response", not bool(response_lost))
+    row.setdefault("status_before_retry", bool(status_reads))
+    row.setdefault("retry_attempted", bool(retries))
+    row.setdefault("duplicate_side_effect", bool(duplicate_count))
+    if "final_state_correct" not in row:
+        row["final_state_correct"] = bool(
+            row.get("exact_final_state_correct", False)
+        )
+
+    if "state_transition" not in row and trace:
+        status_text = "The external state changed." if mutation_committed else "No mutation committed."
+        row["state_transition"] = [
+            {
+                "state": "Mutation committed",
+                "status": "done" if mutation_committed else "not reached",
+                "detail": status_text,
+            },
+            {
+                "state": "Response delivered",
+                "status": "lost" if response_lost else "done",
+                "detail": "The response was ambiguous."
+                if response_lost
+                else "The agent received confirmation.",
+            },
+            {
+                "state": "Status-before-retry",
+                "status": "checked" if status_reads else "not used",
+                "detail": "An authoritative status read resolved the ambiguity."
+                if status_reads
+                else "No status read was needed.",
+            },
+            {
+                "state": "Agent's knowledge",
+                "status": "unknown" if response_lost else "known",
+                "detail": "Retry safety is uncertain."
+                if response_lost
+                else "The outcome is observable.",
+            },
+        ]
+    return row
+
+
+def _metrics_from_trials(
+    trials: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, float]]:
+    """Compute policy-level rates from actual per-trial rows.
+
+    The core aggregates are intentionally detailed by tool and failure phase;
+    the dashboard compares the selected tool across those cells, so the rows
+    are the least ambiguous source for one policy-level headline.
+    """
+
+    grouped: dict[str, list[Mapping[str, Any]]] = {}
+    for trial in trials:
+        if trial.get("policy") is None:
+            continue
+        grouped.setdefault(_canonical_policy(trial["policy"]), []).append(trial)
+    metrics: dict[str, dict[str, float]] = {}
+    for policy, rows in grouped.items():
+        count = len(rows)
+        if not count:
+            continue
+        duplicate_values = [
+            bool(row.get("duplicate_side_effect", row.get("duplicate_side_effects", 0)))
+            for row in rows
+        ]
+        correct_values = [
+            bool(row.get("final_state_correct", row.get("exact_final_state_correct", False)))
+            for row in rows
+        ]
+        retry_values = [bool(row.get("retry_attempted", row.get("retries", 0))) for row in rows]
+        metrics[policy] = {
+            "duplicate_side_effect_rate": sum(duplicate_values) / count,
+            "final_state_correctness": sum(correct_values) / count,
+            "retry_rate": sum(retry_values) / count,
+            "successful_completion_rate": sum(
+                bool(row.get("successful_completion", False)) for row in rows
+            )
+            / count,
+            "mean_duplicate_side_effects": sum(
+                float(row.get("duplicate_side_effects", 0)) for row in rows
+            )
+            / count,
+            "mean_retries": sum(float(row.get("retries", 0)) for row in rows) / count,
+            "mean_status_reads": sum(float(row.get("status_reads", 0)) for row in rows)
+            / count,
+            "mean_calls": sum(float(row.get("calls", 0)) for row in rows) / count,
+            "mean_cost": sum(float(row.get("cost", 0)) for row in rows) / count,
+        }
+    return metrics
+
+
 def _metrics_from(value: Any) -> dict[str, dict[str, Any]]:
     """Normalize the few aggregate layouts used by experiment prototypes."""
 
@@ -261,9 +389,17 @@ def _metrics_from(value: Any) -> dict[str, dict[str, Any]]:
                 values = {
                     str(key): item[key]
                     for key in item
-                    if key not in {"policy", "name", "id"}
+                    if key
+                    not in {
+                        "policy",
+                        "name",
+                        "id",
+                        "tool_kind",
+                        "failure_phase",
+                        "trials",
+                    }
                 }
-            result[_canonical_policy(policy)] = _jsonish(values)
+            result.setdefault(_canonical_policy(policy), {}).update(_jsonish(values))
         return result
 
     if not isinstance(value, Mapping):
@@ -397,8 +533,15 @@ def normalize_results(raw: Any) -> dict[str, Any]:
         ),
         {},
     )
-    trials = _records_from(trial_value)
+    trials = [_adapt_trial_record(record) for record in _records_from(trial_value)]
     metrics = _metrics_from(metric_value_raw)
+    # The merged core emits detailed aggregate cells while the dashboard needs
+    # a compact policy comparison. Per-trial rates are authoritative here.
+    for policy, trial_metrics in _metrics_from_trials(trials).items():
+        metrics.setdefault(policy, {}).update(trial_metrics)
+    for values in metrics.values():
+        if "exact_final_state_rate" in values:
+            values.setdefault("final_state_correctness", values["exact_final_state_rate"])
     supplied_summary = payload.get("summary", {})
     summary = dict(_jsonish(supplied_summary)) if isinstance(supplied_summary, Mapping) else {}
     derived = _derive_summary(trials, metrics)
@@ -430,7 +573,7 @@ def _policy_outcome(
         retry = not status_before_retry
         duplicate = False
         correct = True
-    elif policy == "idempotency_key":
+    elif policy == "idempotency_key_retry":
         retry = True
         duplicate = False
         correct = True
@@ -566,19 +709,30 @@ def build_demo_results(
 
 
 def _make_contract_config(config_class: Any, settings: DashboardSettings) -> Any:
-    """Instantiate the keyword-friendly core config with gentle field aliases."""
+    """Instantiate the core config while tolerating the original UI aliases."""
 
+    phases = {
+        "before_commit": ["before_commit"],
+        "after_commit": ["after_commit"],
+        "random": ["before_commit", "after_commit"],
+    }[settings.failure_timing]
+    # The merged core names these fields explicitly. The legacy aliases are
+    # retained only for a mixed worktree during integration, not used by the
+    # rendered UI itself.
     values = {
         "seed": settings.seed,
         "trials": settings.trials,
-        "tool_types": list(settings.tool_types),
-        "failure_timing": settings.failure_timing,
+        "failure_probability": settings.failure_rate,
         "failure_rate": settings.failure_rate,
+        "failure_phases": phases,
+        "failure_timing": settings.failure_timing,
+        "include_no_failure": True,
+        "max_attempts": 3,
+        "tool_kinds": list(settings.tool_types),
+        "tool_types": list(settings.tool_types),
+        "tool_type": settings.tool_type,
+        "policies": list(settings.selected_policies),
         "selected_policies": list(settings.selected_policies),
-    }
-    aliases = {
-        "tool_types": ("tool_types", "tool_type", "tools"),
-        "selected_policies": ("selected_policies", "policies", "policy_selection"),
     }
     try:
         parameters = inspect.signature(config_class).parameters
@@ -589,15 +743,23 @@ def _make_contract_config(config_class: Any, settings: DashboardSettings) -> Any
         for parameter in parameters.values()
     )
     if accepts_kwargs or not parameters:
-        return config_class(**values)
-    kwargs: dict[str, Any] = {}
-    for canonical, possible_names in aliases.items():
-        target = next((name for name in possible_names if name in parameters), None)
-        if target is not None:
-            kwargs[target] = values[canonical]
-    for name in ("seed", "trials", "failure_timing", "failure_rate"):
-        if name in parameters:
-            kwargs[name] = values[name]
+        return config_class(
+            seed=settings.seed,
+            trials=settings.trials,
+            failure_probability=settings.failure_rate,
+            failure_phases=phases,
+            include_no_failure=True,
+            max_attempts=3,
+            tool_kinds=list(settings.tool_types),
+            policies=list(settings.selected_policies),
+        )
+    kwargs = {
+        name: values[name]
+        for name, parameter in parameters.items()
+        if name in values
+        and parameter.kind
+        not in {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
+    }
     return config_class(**kwargs)
 
 
@@ -715,6 +877,13 @@ def _trial_table_rows(results: Mapping[str, Any], policy: str | None) -> list[di
     rows = []
     for trial in results.get("trials", []):
         outcomes = trial.get("policy_outcomes", {})
+        if (
+            policy
+            and not outcomes
+            and trial.get("policy") is not None
+            and _canonical_policy(trial["policy"]) != _canonical_policy(policy)
+        ):
+            continue
         outcome = outcomes.get(policy, {}) if isinstance(outcomes, Mapping) and policy else {}
         rows.append(
             {
