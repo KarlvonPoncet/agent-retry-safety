@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retry-safety"
+version = "0.1.0"
+description = "A deterministic educational simulator for safe agent retries"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Retry Safety Research Project"}]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  "ruff>=0.6",
+]
+ui = [
+  "streamlit>=1.36",
+  "pandas>=2.0",
+  "plotly>=5.20",
+]
+
+[project.scripts]
+retry-safety = "retry_safety.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+retry_safety = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.coverage.run]
+source = ["retry_safety"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover"]
