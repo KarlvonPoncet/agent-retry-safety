@@ -40,6 +40,17 @@ def test_task_families_and_held_out_tools_are_in_matrix() -> None:
     assert {row.task_family for row in result.trials} == set(TaskFamily)
     assert any(row.held_out_tool for row in result.trials)
     assert {row.semantics for row in result.trials} == set(ToolKind)
+    cells = {
+        (row.task_family, row.semantics, row.held_out_tool)
+        for row in result.trials
+    }
+    assert all(
+        (family, semantics, held_out) in cells
+        for family, semantics in {
+            (row.task_family, row.semantics) for row in result.trials
+        }
+        for held_out in (False, True)
+    )
 
 
 def test_opaque_oracle_trace_keeps_commit_truth_out_of_visible_observation() -> None:
@@ -97,6 +108,31 @@ def test_scripted_llm_adapter_uses_visible_actions_without_private_reasoning() -
     row = next(row for row in result.trials if row.task_id == "payment_charge")
     assert row.model_calls >= 1
     assert all("reasoning" not in event.model_output.lower() for event in row.trace)
+
+
+def test_llm_runs_protocol_ablation_and_counts_only_repeat_invocations() -> None:
+    def fake_model(prompt: str) -> str:
+        if "tool:" in prompt:
+            return '{"action":"retry","use_same_key":false}'
+        return '{"action":"invoke","use_same_key":false}'
+
+    result = run_agent_benchmark(
+        _config(
+            trials=1,
+            controllers=(AgentControllerKind.LLM,),
+            protocol_variants=(
+                ProtocolVariant.MACHINE_READABLE,
+                ProtocolVariant.PROMPT_ONLY,
+            ),
+        ),
+        model=fake_model,
+    )
+    rows = [row for row in result.trials if row.task_id == "payment_charge"]
+    assert {row.protocol_variant for row in rows} == {
+        ProtocolVariant.MACHINE_READABLE,
+        ProtocolVariant.PROMPT_ONLY,
+    }
+    assert all(row.retries == 1 for row in rows)
 
 
 def test_subprocess_adapter_reports_failures_and_accepts_text(tmp_path) -> None:
