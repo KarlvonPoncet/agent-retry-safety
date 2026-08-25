@@ -26,6 +26,7 @@ ui = [
 
 [project.scripts]
 retry-safety = "retry_safety.cli:main"
+retry-safety-agent = "retry_safety.agent_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

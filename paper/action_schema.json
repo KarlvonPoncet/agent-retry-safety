@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["invoke", "retry", "reconcile", "stop"]
+    },
+    "use_same_key": {"type": "boolean"}
+  },
+  "required": ["action", "use_same_key"],
+  "additionalProperties": false
+}

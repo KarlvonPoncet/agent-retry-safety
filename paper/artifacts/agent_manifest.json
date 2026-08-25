@@ -1,0 +1,328 @@
+{
+  "config": {
+    "controllers": [
+      "no_retry",
+      "blind_retry",
+      "status_before_retry",
+      "same_key_retry",
+      "rule_safety_wrapper",
+      "uncertainty_protocol"
+    ],
+    "error_wordings": [
+      "timeout",
+      "connection_lost",
+      "service_unavailable",
+      "held_out"
+    ],
+    "failure_phases": [
+      "before_commit",
+      "after_commit"
+    ],
+    "failure_probability": 1.0,
+    "include_no_failure": true,
+    "max_attempts": 3,
+    "protocol_variants": [
+      "machine_readable",
+      "natural_language",
+      "prompt_only"
+    ],
+    "seed": 20260825,
+    "task_specs": [
+      {
+        "family": "payment",
+        "held_out_tool": false,
+        "operation_name": "charge a card",
+        "semantics": "non_idempotent_mutation",
+        "task_id": "payment_charge",
+        "tool_description": "Charge the customer's card exactly once for the requested amount.",
+        "tool_name": "charge_card"
+      },
+      {
+        "family": "messaging",
+        "held_out_tool": false,
+        "operation_name": "send an email",
+        "semantics": "non_idempotent_mutation",
+        "task_id": "email_send",
+        "tool_description": "Send one transactional email to the supplied recipient.",
+        "tool_name": "send_email"
+      },
+      {
+        "family": "fulfillment",
+        "held_out_tool": false,
+        "operation_name": "create a shipment",
+        "semantics": "non_idempotent_mutation",
+        "task_id": "shipment_create",
+        "tool_description": "Create one shipment for the order; duplicate shipments are harmful.",
+        "tool_name": "create_shipment"
+      },
+      {
+        "family": "support",
+        "held_out_tool": true,
+        "operation_name": "set a ticket status",
+        "semantics": "idempotent_mutation",
+        "task_id": "ticket_status",
+        "tool_description": "Set the ticket status to resolved; repeating the same value is safe.",
+        "tool_name": "set_ticket_status"
+      },
+      {
+        "family": "calendar",
+        "held_out_tool": true,
+        "operation_name": "upsert a calendar event",
+        "semantics": "idempotent_mutation",
+        "task_id": "calendar_upsert",
+        "tool_description": "Ensure the calendar event exists with the requested fields.",
+        "tool_name": "upsert_event"
+      },
+      {
+        "family": "lookup",
+        "held_out_tool": true,
+        "operation_name": "look up an order",
+        "semantics": "read_only",
+        "task_id": "order_lookup",
+        "tool_description": "Read the order status without changing it.",
+        "tool_name": "lookup_order"
+      }
+    ],
+    "trials": 30
+  },
+  "ground_truth": {
+    "controller_visibility": "opaque; committed bit is never exposed",
+    "cost_units": {
+      "model_call": 4,
+      "operation": 1,
+      "status_read": 2
+    },
+    "oracle": "retry_safety.simulator.DeterministicToolSession"
+  },
+  "manifest_sha256": "43efe4c9fa16a07ff5a85da4e98c089829c4938077325cd602b81464c9457a59",
+  "protocol": {
+    "if_committed": "complete_without_retry",
+    "if_not_committed": "retry_once_with_same_key",
+    "if_still_unknown": "stop_and_escalate",
+    "on_ambiguous_result": "unknown",
+    "protocol_id": "commit-uncertainty-reconciliation-v1",
+    "reconcile": {
+      "action": "read_status",
+      "authoritative": true,
+      "request_key": "same logical operation key"
+    },
+    "state_space": [
+      "unknown",
+      "committed",
+      "not_committed"
+    ]
+  },
+  "schedule": [
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 0,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 2504740415256945488
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 1,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 7489379747519166982
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 2,
+      "scheduled_phase": "none",
+      "trial_seed": 7705035060139335355
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 3,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 8045767097826218025
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 4,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 6108205500616403358
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 5,
+      "scheduled_phase": "none",
+      "trial_seed": 476635993241859555
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 6,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 7487994604089220442
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 7,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 7903060028303779987
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 8,
+      "scheduled_phase": "none",
+      "trial_seed": 4264460612119526051
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 9,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 1593177935830523378
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 10,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 6555354723474673684
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 11,
+      "scheduled_phase": "none",
+      "trial_seed": 8467616124335477347
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 12,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 9175460599067768500
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 13,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 6755760478144539374
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 14,
+      "scheduled_phase": "none",
+      "trial_seed": 3932250296198559356
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 15,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 8393246853888453178
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 16,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 350069796082768435
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 17,
+      "scheduled_phase": "none",
+      "trial_seed": 6407151830034533370
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 18,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 8146418924997859537
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 19,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 1263693461120088441
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 20,
+      "scheduled_phase": "none",
+      "trial_seed": 2651508553945885571
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 21,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 4089327362179784161
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 22,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 867474420302130062
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 23,
+      "scheduled_phase": "none",
+      "trial_seed": 8215218133234360105
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 24,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 2615213417745459796
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 25,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 3221706497405743499
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 26,
+      "scheduled_phase": "none",
+      "trial_seed": 7447689789962160284
+    },
+    {
+      "applied_phase": "before_commit",
+      "failure_probability": 1.0,
+      "replicate": 27,
+      "scheduled_phase": "before_commit",
+      "trial_seed": 5458617613690734661
+    },
+    {
+      "applied_phase": "after_commit",
+      "failure_probability": 1.0,
+      "replicate": 28,
+      "scheduled_phase": "after_commit",
+      "trial_seed": 6933968318714757482
+    },
+    {
+      "applied_phase": "none",
+      "failure_probability": 1.0,
+      "replicate": 29,
+      "scheduled_phase": "none",
+      "trial_seed": 1138444048707789377
+    }
+  ],
+  "schema_version": "retry-safety-agent-manifest-v1"
+}

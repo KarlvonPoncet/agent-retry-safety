@@ -1,0 +1,153 @@
+{
+  "verified_on": "2026-08-25",
+  "verification_note": "DOI metadata was checked against Crossref works; preprints against the arXiv API/abstract pages; engineering sources against the linked first-party pages.",
+  "references": [
+    {
+      "id": "lamport1978",
+      "authors": ["Leslie Lamport"],
+      "title": "Time, clocks, and the ordering of events in a distributed system",
+      "year": 1978,
+      "venue": "Communications of the ACM",
+      "volume": "21",
+      "issue": "7",
+      "pages": "558-565",
+      "doi": "10.1145/359545.359563",
+      "url": "https://doi.org/10.1145/359545.359563",
+      "verified_via": "https://api.crossref.org/works/10.1145/359545.359563"
+    },
+    {
+      "id": "birrell1984",
+      "authors": ["Andrew D. Birrell", "Bruce Jay Nelson"],
+      "title": "Implementing remote procedure calls",
+      "year": 1984,
+      "venue": "ACM Transactions on Computer Systems",
+      "volume": "2",
+      "issue": "1",
+      "pages": "39-59",
+      "doi": "10.1145/2080.357392",
+      "url": "https://doi.org/10.1145/2080.357392",
+      "verified_via": "https://api.crossref.org/works/10.1145/2080.357392"
+    },
+    {
+      "id": "fischer1985",
+      "authors": ["Michael J. Fischer", "Nancy A. Lynch", "Michael S. Paterson"],
+      "title": "Impossibility of distributed consensus with one faulty process",
+      "year": 1985,
+      "venue": "Journal of the ACM",
+      "volume": "32",
+      "issue": "2",
+      "pages": "374-382",
+      "doi": "10.1145/3149.214121",
+      "url": "https://doi.org/10.1145/3149.214121",
+      "verified_via": "https://api.crossref.org/works/10.1145/3149.214121"
+    },
+    {
+      "id": "featonby2023",
+      "authors": ["Malcolm Featonby"],
+      "title": "Making retries safe with idempotent APIs",
+      "year": null,
+      "venue": "AWS Builders' Library",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/",
+      "verified_via": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    },
+    {
+      "id": "stripe2026",
+      "authors": ["Stripe"],
+      "title": "Idempotent requests",
+      "year": null,
+      "venue": "Stripe API Reference",
+      "url": "https://docs.stripe.com/api/idempotent_requests",
+      "verified_via": "https://docs.stripe.com/api/idempotent_requests"
+    },
+    {
+      "id": "temporal2026",
+      "authors": ["Temporal Technologies"],
+      "title": "Workflow Execution overview",
+      "year": null,
+      "venue": "Temporal Documentation",
+      "url": "https://docs.temporal.io/workflow-execution",
+      "verified_via": "https://docs.temporal.io/workflow-execution"
+    },
+    {
+      "id": "yao2023react",
+      "authors": ["Shunyu Yao", "Jeffrey Zhao", "Dian Yu", "Nan Du", "Izhak Shafran", "Karthik Narasimhan", "Yuan Cao"],
+      "title": "ReAct: Synergizing reasoning and acting in language models",
+      "year": 2022,
+      "venue": "arXiv preprint arXiv:2210.03629",
+      "url": "https://arxiv.org/abs/2210.03629",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2210.03629"
+    },
+    {
+      "id": "schick2023",
+      "authors": ["Timo Schick", "Jane Dwivedi-Yu", "Roberto Dessì", "Roberta Raileanu", "Maria Lomeli", "Luke Zettlemoyer", "Nicola Cancedda", "Thomas Scialom"],
+      "title": "Toolformer: Language models can teach themselves to use tools",
+      "year": 2023,
+      "venue": "arXiv preprint arXiv:2302.04761",
+      "url": "https://arxiv.org/abs/2302.04761",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2302.04761"
+    },
+    {
+      "id": "liu2023agentbench",
+      "authors": ["Xiao Liu", "Hao Yu", "Hanchen Zhang", "Yifan Xu", "Xuanyu Lei", "Hanyu Lai", "Yu Gu", "Hangliang Ding", "Kaiwen Men", "Kejuan Yang", "Shudan Zhang", "Xiang Deng", "Aohan Zeng", "Zhengxiao Du", "Chenhui Zhang", "Sheng Shen", "Tianjun Zhang", "Yu Su", "Huan Sun", "Minlie Huang", "Yuxiao Dong", "Jie Tang"],
+      "title": "AgentBench: Evaluating LLMs as agents",
+      "year": 2023,
+      "venue": "arXiv preprint arXiv:2308.03688",
+      "url": "https://arxiv.org/abs/2308.03688",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2308.03688"
+    },
+    {
+      "id": "zhou2023webarena",
+      "authors": ["Shuyan Zhou", "Frank F. Xu", "Hao Zhu", "Xuhui Zhou", "Robert Lo", "Abishek Sridhar", "Xianyi Cheng", "Tianyue Ou", "Yonatan Bisk", "Daniel Fried", "Uri Alon", "Graham Neubig"],
+      "title": "WebArena: A realistic web environment for building autonomous agents",
+      "year": 2023,
+      "venue": "arXiv preprint arXiv:2307.13854",
+      "url": "https://arxiv.org/abs/2307.13854",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2307.13854"
+    },
+    {
+      "id": "yao2024taubench",
+      "authors": ["Shunyu Yao", "Noah Shinn", "Pedram Razavi", "Karthik Narasimhan"],
+      "title": "τ-bench: A benchmark for tool-agent-user interaction in real-world domains",
+      "year": 2024,
+      "venue": "arXiv preprint arXiv:2406.12045",
+      "url": "https://arxiv.org/abs/2406.12045",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2406.12045"
+    },
+    {
+      "id": "lu2024toolsandbox",
+      "authors": ["Jiarui Lu", "Thomas Holleis", "Yizhe Zhang", "Bernhard Aumayer", "Feng Nan", "Felix Bai", "Shuang Ma", "Shen Ma", "Mengyu Li", "Guoli Yin", "Zirui Wang", "Ruoming Pang"],
+      "title": "ToolSandbox: A stateful, conversational, interactive evaluation benchmark for LLM tool use capabilities",
+      "year": 2024,
+      "venue": "arXiv preprint arXiv:2408.04682",
+      "url": "https://arxiv.org/abs/2408.04682",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2408.04682"
+    },
+    {
+      "id": "li2023apibank",
+      "authors": ["Minghao Li", "Yingxiu Zhao", "Bowen Yu", "Feifan Song", "Hangyu Li", "Haiyang Yu", "Zhoujun Li", "Fei Huang", "Yongbin Li"],
+      "title": "API-Bank: A comprehensive benchmark for tool-augmented LLMs",
+      "year": 2023,
+      "venue": "arXiv preprint arXiv:2304.08244",
+      "url": "https://arxiv.org/abs/2304.08244",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2304.08244"
+    },
+    {
+      "id": "qin2023toollm",
+      "authors": ["Yujia Qin", "Shihao Liang", "Yining Ye", "Kunlun Zhu", "Lan Yan", "Yaxi Lu", "Yankai Lin", "Xin Cong", "Xiangru Tang", "Bill Qian", "Sihan Zhao", "Lauren Hong", "Runchu Tian", "Ruobing Xie", "Jie Zhou", "Mark Gerstein", "Dahai Li", "Zhiyuan Liu", "Maosong Sun"],
+      "title": "ToolLLM: Facilitating large language models to master 16000+ real-world APIs",
+      "year": 2023,
+      "venue": "arXiv preprint arXiv:2307.16789",
+      "url": "https://arxiv.org/abs/2307.16789",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2307.16789"
+    },
+    {
+      "id": "jimenez2023swebench",
+      "authors": ["Carlos E. Jimenez", "John Yang", "Alexander Wettig", "Shunyu Yao", "Kexin Pei", "Ofir Press", "Karthik Narasimhan"],
+      "title": "SWE-bench: Can language models resolve real-world GitHub issues?",
+      "year": 2023,
+      "venue": "arXiv preprint arXiv:2310.06770",
+      "url": "https://arxiv.org/abs/2310.06770",
+      "verified_via": "https://export.arxiv.org/api/query?id_list=2310.06770"
+    }
+  ]
+}

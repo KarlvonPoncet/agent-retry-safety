@@ -1,0 +1,87 @@
+{
+  "config": {
+    "controllers": [
+      "llm"
+    ],
+    "error_wordings": [
+      "timeout",
+      "connection_lost",
+      "service_unavailable",
+      "held_out"
+    ],
+    "failure_phases": [
+      "before_commit",
+      "after_commit"
+    ],
+    "failure_probability": 1.0,
+    "include_no_failure": true,
+    "max_attempts": 3,
+    "protocol_variants": [
+      "machine_readable",
+      "natural_language",
+      "prompt_only"
+    ],
+    "seed": 20260825,
+    "task_specs": [
+      {
+        "family": "payment",
+        "held_out_tool": false,
+        "operation_name": "charge a card",
+        "semantics": "non_idempotent_mutation",
+        "task_id": "payment_charge",
+        "tool_description": "Charge the customer's card exactly once for the requested amount.",
+        "tool_name": "charge_card"
+      },
+      {
+        "family": "messaging",
+        "held_out_tool": false,
+        "operation_name": "send an email",
+        "semantics": "non_idempotent_mutation",
+        "task_id": "email_send",
+        "tool_description": "Send one transactional email to the supplied recipient.",
+        "tool_name": "send_email"
+      },
+      {
+        "family": "fulfillment",
+        "held_out_tool": false,
+        "operation_name": "create a shipment",
+        "semantics": "non_idempotent_mutation",
+        "task_id": "shipment_create",
+        "tool_description": "Create one shipment for the order; duplicate shipments are harmful.",
+        "tool_name": "create_shipment"
+      },
+      {
+        "family": "support",
+        "held_out_tool": true,
+        "operation_name": "set a ticket status",
+        "semantics": "idempotent_mutation",
+        "task_id": "ticket_status",
+        "tool_description": "Set the ticket status to resolved; repeating the same value is safe.",
+        "tool_name": "set_ticket_status"
+      },
+      {
+        "family": "calendar",
+        "held_out_tool": true,
+        "operation_name": "upsert a calendar event",
+        "semantics": "idempotent_mutation",
+        "task_id": "calendar_upsert",
+        "tool_description": "Ensure the calendar event exists with the requested fields.",
+        "tool_name": "upsert_event"
+      },
+      {
+        "family": "lookup",
+        "held_out_tool": true,
+        "operation_name": "look up an order",
+        "semantics": "read_only",
+        "task_id": "order_lookup",
+        "tool_description": "Read the order status without changing it.",
+        "tool_name": "lookup_order"
+      }
+    ],
+    "trials": 3
+  },
+  "model_name": "codex:gpt-5.6-luna",
+  "model_source": "authenticated codex exec; final schema-constrained JSON only",
+  "private_reasoning_recorded": false,
+  "skipped_controllers": []
+}
