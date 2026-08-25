@@ -19,6 +19,6 @@ sha256sum -c paper/artifacts/SHA256SUMS
 
 Artifact generation commands and the model-facility boundary are documented in
 `README.md` and `paper/paper.md`. The credential-free deterministic artifacts
-contain 360 core rows and 5,760 agent rows. The authenticated single-facility
-matrix contains 72 model rows; its final schema-constrained outputs are in
+contain 360 core rows and 11,520 agent rows. The authenticated single-facility
+matrix contains 432 model rows; its final schema-constrained outputs are in
 `paper/artifacts/llm_matrix_traces.jsonl`, and no private reasoning is stored.

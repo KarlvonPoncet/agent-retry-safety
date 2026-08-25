@@ -211,7 +211,7 @@ The tests cover before- and after-commit behavior, duplicate detection, all four
 
 ## Agent benchmark and paper
 
-The agent-facing extension is `retry_safety.agent_benchmark`. It keeps the existing `DeterministicToolSession` as the oracle and adds realistic payment, messaging, fulfillment, support, calendar, and lookup task families; held-out tool surface forms; four error wordings; paired failure schedules; deterministic baselines; a rule safety wrapper; and a machine-readable commit-uncertainty/reconciliation protocol. The controller-visible adapter never returns the simulator's `committed` field. Raw final model actions and oracle traces are retained in JSON artifacts; private model reasoning is not recorded.
+The agent-facing extension is `retry_safety.agent_benchmark`. It keeps the existing `DeterministicToolSession` as the oracle and adds realistic payment, messaging, fulfillment, support, calendar, and lookup task families; matched train/held-out tool surface forms for every family and operation semantics; four error wordings; paired failure schedules; deterministic baselines; a rule safety wrapper; and a machine-readable commit-uncertainty/reconciliation protocol. The controller-visible adapter never returns the simulator's `committed` field. Raw final model actions and oracle traces are retained in JSON artifacts; private model reasoning is not recorded.
 
 Run the full credential-free deterministic agent matrix and regenerate its table and SVG figure:
 

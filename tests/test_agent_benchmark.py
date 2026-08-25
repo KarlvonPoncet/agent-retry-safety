@@ -94,9 +94,7 @@ def test_benchmark_json_round_trip_and_manifest_are_machine_readable() -> None:
 
 def test_scripted_llm_adapter_uses_visible_actions_without_private_reasoning() -> None:
     def fake_model(prompt: str) -> str:
-        if "tool:" in prompt:
-            return '{"action":"reconcile","use_same_key":true}'
-        return '{"action":"invoke","use_same_key":true}'
+        return '{"action":"reconcile","use_same_key":true}'
 
     result = run_agent_benchmark(
         _config(
@@ -107,14 +105,15 @@ def test_scripted_llm_adapter_uses_visible_actions_without_private_reasoning() -
     )
     row = next(row for row in result.trials if row.task_id == "payment_charge")
     assert row.model_calls >= 1
+    assert row.trace[0].action == "invoke"
+    assert row.trace[0].model_output == ""
+    assert "Prior visible observations: tool:" in row.trace[1].input_text
     assert all("reasoning" not in event.model_output.lower() for event in row.trace)
 
 
 def test_llm_runs_protocol_ablation_and_counts_only_repeat_invocations() -> None:
     def fake_model(prompt: str) -> str:
-        if "tool:" in prompt:
-            return '{"action":"retry","use_same_key":false}'
-        return '{"action":"invoke","use_same_key":false}'
+        return '{"action":"retry","use_same_key":false}'
 
     result = run_agent_benchmark(
         _config(

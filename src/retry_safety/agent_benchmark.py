@@ -1051,12 +1051,16 @@ def _llm_controller(
     model: ModelAdapter | Callable[[str], str],
     protocol_variant: ProtocolVariant,
 ) -> tuple[_Outcome, str]:
-    history: list[str] = []
-    first_observed = "success"
+    response = session.invoke(key)
+    first_observed = "success" if response.succeeded else "ambiguous_error"
+    _record(trace, 1, "invoke", response.message, key=key)
+    if response.succeeded:
+        return _Outcome(True, 0), first_observed
+    history = [f"tool: {response.message}"]
     retries = 0
-    operation_attempts = 0
+    operation_attempts = 1
     max_steps = max_attempts * 2 + 2
-    for step in range(1, max_steps + 1):
+    for step in range(2, max_steps + 1):
         prompt = _llm_prompt(task, wording, history, key, protocol_variant)
         raw = model(prompt)
         action, use_key = _parse_action(raw)
@@ -1065,8 +1069,6 @@ def _llm_controller(
             if operation_attempts > 1:
                 retries += 1
             response = session.invoke(use_key)
-            if operation_attempts == 1 and not response.succeeded:
-                first_observed = "ambiguous_error"
             _record(
                 trace,
                 step,
