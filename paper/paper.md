@@ -30,7 +30,7 @@ The research questions are:
 - **RQ3 (mitigation):** Does explicit uncertainty plus authoritative reconciliation reduce unsafe retries without sacrificing completion?
 - **RQ4 (trade-off):** What safety, completion, and call-cost trade-off does each controller impose?
 
-We pre-register the following directional hypotheses in the benchmark manifest rather than treating the simulator output as a surprise: **H1**, blind retry will be unsafe primarily after commit for non-idempotent operations; **H2**, idempotent and read-only semantics will suppress duplicate-effect failures but not necessarily unnecessary calls; **H3**, status, same-key, and explicit reconciliation mitigations will reduce unsafe retries relative to blind retry; and **H4**, safer information-seeking controllers will spend more calls, while no-retry will lose completion after a before- or after-commit ambiguity. Wording effects are an empirical question for the model controller; deterministic policies do not parse language and therefore provide a useful null control.
+We evaluate the following directional hypotheses: **H1**, blind retry will be unsafe primarily after commit for non-idempotent operations; **H2**, idempotent and read-only semantics will suppress duplicate-effect failures but not necessarily unnecessary calls; **H3**, status, same-key, and explicit reconciliation mitigations will reduce unsafe retries relative to blind retry; and **H4**, safer information-seeking controllers will spend more calls, while no-retry will lose completion after a before- or after-commit ambiguity. These hypotheses document the expected consequences of the formal model rather than a preregistered analysis. Wording effects are an empirical question for the model controller; deterministic policies do not parse language and therefore provide a useful null control.
 
 ## 2. Related work and literature review
 
@@ -85,13 +85,19 @@ The benchmark uses six semantic task families:
 | Family | Tool surface | Oracle semantics | Held out? |
 |---|---|---|---|
 | payment | `charge_card` | non-idempotent mutation | no |
+| payment | `debit_payment_method` | non-idempotent mutation | yes |
 | messaging | `send_email` | non-idempotent mutation | no |
+| messaging | `dispatch_notification` | non-idempotent mutation | yes |
 | fulfillment | `create_shipment` | non-idempotent mutation | no |
-| support | `set_ticket_status` | idempotent mutation | yes |
-| calendar | `upsert_event` | idempotent mutation | yes |
-| lookup | `lookup_order` | read-only | yes |
+| fulfillment | `book_parcel` | non-idempotent mutation | yes |
+| support | `set_ticket_status` | idempotent mutation | no |
+| support | `update_case_state` | idempotent mutation | yes |
+| calendar | `upsert_event` | idempotent mutation | no |
+| calendar | `ensure_meeting` | idempotent mutation | yes |
+| lookup | `lookup_order` | read-only | no |
+| lookup | `read_purchase_state` | read-only | yes |
 
-The names and natural-language descriptions vary independently of the oracle semantics. The three held-out tool names are not special-cased by deterministic policies. The operation families are intentionally ordinary examples where accidental duplication has different practical consequences; the simulator does not contact a payment, mail, shipping, calendar, or support provider.
+The names and natural-language descriptions vary independently of the oracle semantics. Each family has one training tool and one held-out paraphrase, and the six held-out tool names are not special-cased by deterministic policies. The operation families are intentionally ordinary examples where accidental duplication has different practical consequences; the simulator does not contact a payment, mail, shipping, calendar, or support provider.
 
 ### 4.2 Failure schedules and wording
 

@@ -27,7 +27,7 @@ a { color: #075e9a; }
 <li><strong>RQ3 (mitigation):</strong> Does explicit uncertainty plus authoritative reconciliation reduce unsafe retries without sacrificing completion?</li>
 <li><strong>RQ4 (trade-off):</strong> What safety, completion, and call-cost trade-off does each controller impose?</li>
 </ul>
-<p>We pre-register the following directional hypotheses in the benchmark manifest rather than treating the simulator output as a surprise: <strong>H1</strong>, blind retry will be unsafe primarily after commit for non-idempotent operations; <strong>H2</strong>, idempotent and read-only semantics will suppress duplicate-effect failures but not necessarily unnecessary calls; <strong>H3</strong>, status, same-key, and explicit reconciliation mitigations will reduce unsafe retries relative to blind retry; and <strong>H4</strong>, safer information-seeking controllers will spend more calls, while no-retry will lose completion after a before- or after-commit ambiguity. Wording effects are an empirical question for the model controller; deterministic policies do not parse language and therefore provide a useful null control.</p>
+<p>We evaluate the following directional hypotheses: <strong>H1</strong>, blind retry will be unsafe primarily after commit for non-idempotent operations; <strong>H2</strong>, idempotent and read-only semantics will suppress duplicate-effect failures but not necessarily unnecessary calls; <strong>H3</strong>, status, same-key, and explicit reconciliation mitigations will reduce unsafe retries relative to blind retry; and <strong>H4</strong>, safer information-seeking controllers will spend more calls, while no-retry will lose completion after a before- or after-commit ambiguity. These hypotheses document the expected consequences of the formal model rather than a preregistered analysis. Wording effects are an empirical question for the model controller; deterministic policies do not parse language and therefore provide a useful null control.</p>
 <h2>2. Related work and literature review</h2>
 <h3>2.1 Distributed calls, partial observation, and idempotency</h3>
 <p>A remote call has at least a request path, a server-side action, and a response path. Birrell and Nelson&#x27;s RPC treatment [2] is an early authoritative account of making such calls appear procedural despite communication failure. Lamport&#x27;s event-ordering framework [1] supplies the broader vocabulary for reasoning about what can and cannot be inferred from distributed observations. The FLP result [3] is not a retry algorithm and is not presented here as one; it is relevant as a boundary on what a process can conclude in an asynchronous system with faults.</p>
@@ -62,17 +62,29 @@ a { color: #075e9a; }
 
 <pre class="table">| payment | `charge_card` | non-idempotent mutation | no |
 
+<pre class="table">| payment | `debit_payment_method` | non-idempotent mutation | yes |
+
 <pre class="table">| messaging | `send_email` | non-idempotent mutation | no |
+
+<pre class="table">| messaging | `dispatch_notification` | non-idempotent mutation | yes |
 
 <pre class="table">| fulfillment | `create_shipment` | non-idempotent mutation | no |
 
-<pre class="table">| support | `set_ticket_status` | idempotent mutation | yes |
+<pre class="table">| fulfillment | `book_parcel` | non-idempotent mutation | yes |
 
-<pre class="table">| calendar | `upsert_event` | idempotent mutation | yes |
+<pre class="table">| support | `set_ticket_status` | idempotent mutation | no |
 
-<pre class="table">| lookup | `lookup_order` | read-only | yes |
+<pre class="table">| support | `update_case_state` | idempotent mutation | yes |
 
-<p>The names and natural-language descriptions vary independently of the oracle semantics. The three held-out tool names are not special-cased by deterministic policies. The operation families are intentionally ordinary examples where accidental duplication has different practical consequences; the simulator does not contact a payment, mail, shipping, calendar, or support provider.</p>
+<pre class="table">| calendar | `upsert_event` | idempotent mutation | no |
+
+<pre class="table">| calendar | `ensure_meeting` | idempotent mutation | yes |
+
+<pre class="table">| lookup | `lookup_order` | read-only | no |
+
+<pre class="table">| lookup | `read_purchase_state` | read-only | yes |
+
+<p>The names and natural-language descriptions vary independently of the oracle semantics. Each family has one training tool and one held-out paraphrase, and the six held-out tool names are not special-cased by deterministic policies. The operation families are intentionally ordinary examples where accidental duplication has different practical consequences; the simulator does not contact a payment, mail, shipping, calendar, or support provider.</p>
 <h3>4.2 Failure schedules and wording</h3>
 <p>Failure phases are <code>before_commit</code>, <code>after_commit</code>, and <code>none</code>. A seeded schedule assigns phases by replicate and is written to <code>agent_manifest.json</code>; every controller, task, and wording in a replicate receives the same assignment. The completed deterministic matrix uses seed 20260825, 30 replicates, and a 1.0 failure probability for scheduled failures, producing ten replicates per phase. The core lab matrix uses seed 42, 30 replicates, and its original three tools and four policies as a regression-ground-truth run.</p>
 <p>The four controller-visible wordings are:</p>
