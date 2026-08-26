@@ -46,7 +46,7 @@ a { color: #075e9a; }
 <li><strong>after commit:</strong> the effect is applied, so $s=f_o(s_0)$, but the response is hidden;</li>
 <li><strong>no failure:</strong> the successful response is returned normally.</li>
 </ul>
-<p>The <strong>true commit state</strong> $C$ is <code>not_committed</code>, <code>committed</code>, or <code>not_applicable</code> for a read. The <strong>observed result</strong> $R$ is what the controller receives: <code>success</code> or an ambiguous error. On an ambiguous error, both <code>C=not_committed</code> and <code>C=committed</code> are possible from the controller&#x27;s perspective. The ground-truth trace records $C`; the opaque session does not expose it.</p>
+<p>The <strong>true commit state</strong> $C$ is <code>not_committed</code>, <code>committed</code>, or <code>not_applicable</code> for a read. The <strong>observed result</strong> $R$ is what the controller receives: <code>success</code> or an ambiguous error. On an ambiguous error, both <code>C=not_committed</code> and <code>C=committed</code> are possible from the controller&#x27;s perspective. The ground-truth trace records $C$; the opaque session does not expose it.</p>
 <p>An operation&#x27;s <strong>semantics</strong> determine what a repeated commit does. A read-only operation changes no state. An idempotent mutation satisfies $f_o(f_o(s))=f_o(s)$ for the relevant target. A non-idempotent mutation accumulates an additional logical effect. This operational definition is deliberately local; it does not claim that all real operations fit one integer counter.</p>
 <p>The <strong>observed completion</strong> is the controller&#x27;s decision that the operation is done, either from a success response or from a reliable status response. <strong>Safety</strong> is exact target state with no duplicate logical side effect. <strong>Liveness</strong> is successful completion as observed by the controller. The benchmark reports both because a no-retry controller can leave the correct state after an after-commit error while failing to establish completion, and a blind retry can report success while over-applying a non-idempotent effect.</p>
 <p>For row $i$, let $D_i$ be duplicate side effects beyond the one intended effect, $X_i$ indicate exact final-state correctness, $L_i$ indicate successful completion, and $K_i$ be the cost. The primary unsafe-retry indicator is $U_i=1[D_i&gt;0]$; its rate is $\hat U=\sum_i U_i/n$. Call cost uses one unit per operation attempt, two per status read, and four per model decision. The latter is a transparent proxy, not a provider price. Wilson 95% intervals are generated for binary rates; means and raw rows are also retained.</p>
@@ -215,7 +215,9 @@ python3.11 -m venv .venv
 </code></pre>
 <p>The authenticated one-model run requires an already authenticated Codex CLI and does not buy credentials or start a subscription. It is intentionally separate from the credential-free deterministic command:</p>
 <pre><code>
-RETRY_SAFETY_CODEX_MODEL=&quot;$PI_MODEL&quot; .venv/bin/python scripts/run_llm_matrix.py
+RETRY_SAFETY_CODEX_MODEL=&lt;authenticated-model-id&gt; \
+
+  .venv/bin/python scripts/run_llm_matrix.py
 
 .venv/bin/python scripts/analyze_results.py \
 

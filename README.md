@@ -235,7 +235,8 @@ The original deterministic core matrix remains available and is used as a regres
 An LLM adapter is optional and provider-neutral. The completed single-facility run used an already authenticated Codex CLI, with schema-constrained final JSON only. It does not buy credentials or start a subscription, and no model comparison is claimed:
 
 ```sh
-RETRY_SAFETY_CODEX_MODEL="$PI_MODEL" .venv/bin/python scripts/run_llm_matrix.py
+RETRY_SAFETY_CODEX_MODEL=<authenticated-model-id> \
+  .venv/bin/python scripts/run_llm_matrix.py
 .venv/bin/python scripts/analyze_results.py \
   paper/artifacts/llm_matrix.json paper/artifacts/llm_analysis
 ```
@@ -250,7 +251,7 @@ make -C paper
 
 ## Limitations
 
-This is an educational core, not a production payment simulator. It has one logical operation, one state value, one injected failure, a reliable status endpoint, and no network timing, concurrent writers, partial responses, server outage, authentication, or compensation transaction. The policy controllers are deterministic and do not measure language-model comprehension. The cost function is illustrative rather than a claim about provider pricing. Results are only as broad as the explicit matrix and schedule in `ExperimentConfig`.
+This is an educational core, not a production payment simulator. Each trial has one logical operation, one state value, one injected failure, a reliable status endpoint, and no network timing, concurrent writers, partial responses, server outage, authentication, or compensation transaction. The credential-free policy controllers are deterministic; the optional model adapter measures actions from an external controller, not private reasoning or general language comprehension. The cost function is illustrative rather than a claim about provider pricing. Results are only as broad as the explicit core or agent benchmark matrix and schedule.
 
 ## Research extensions
 

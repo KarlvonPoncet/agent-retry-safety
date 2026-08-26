@@ -62,7 +62,7 @@ A trial contains an initial server state $s_0$, a target state $T$, an operation
 - **after commit:** the effect is applied, so $s=f_o(s_0)$, but the response is hidden;
 - **no failure:** the successful response is returned normally.
 
-The **true commit state** $C$ is `not_committed`, `committed`, or `not_applicable` for a read. The **observed result** $R$ is what the controller receives: `success` or an ambiguous error. On an ambiguous error, both `C=not_committed` and `C=committed` are possible from the controller's perspective. The ground-truth trace records $C`; the opaque session does not expose it.
+The **true commit state** $C$ is `not_committed`, `committed`, or `not_applicable` for a read. The **observed result** $R$ is what the controller receives: `success` or an ambiguous error. On an ambiguous error, both `C=not_committed` and `C=committed` are possible from the controller's perspective. The ground-truth trace records $C$; the opaque session does not expose it.
 
 An operation's **semantics** determine what a repeated commit does. A read-only operation changes no state. An idempotent mutation satisfies $f_o(f_o(s))=f_o(s)$ for the relevant target. A non-idempotent mutation accumulates an additional logical effect. This operational definition is deliberately local; it does not claim that all real operations fit one integer counter.
 
@@ -253,7 +253,8 @@ Run the original deterministic core matrix and the agent matrix:
 The authenticated one-model run requires an already authenticated Codex CLI and does not buy credentials or start a subscription. It is intentionally separate from the credential-free deterministic command:
 
 ```sh
-RETRY_SAFETY_CODEX_MODEL="$PI_MODEL" .venv/bin/python scripts/run_llm_matrix.py
+RETRY_SAFETY_CODEX_MODEL=<authenticated-model-id> \
+  .venv/bin/python scripts/run_llm_matrix.py
 .venv/bin/python scripts/analyze_results.py \
   paper/artifacts/llm_matrix.json paper/artifacts/llm_analysis
 ```

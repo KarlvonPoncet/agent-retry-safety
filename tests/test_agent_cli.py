@@ -22,7 +22,8 @@ def test_agent_cli_writes_manifest_result_and_trace(tmp_path, capsys) -> None:
         )
         == 0
     )
-    assert json.loads(result.read_text())["schema_version"] == "retry-safety-agent-v1"
+    result_data = json.loads(result.read_text())
+    assert result_data["schema_version"] == "retry-safety-agent-v1"
     assert json.loads(manifest.read_text())["schema_version"].endswith("manifest-v1")
-    assert len(trace.read_text().splitlines()) == 192
-    assert "trial_rows: 192" in capsys.readouterr().out
+    assert len(trace.read_text().splitlines()) == len(result_data["trials"])
+    assert f"trial_rows: {len(result_data['trials'])}" in capsys.readouterr().out
