@@ -1,10 +1,10 @@
 # Validation evidence
 
-Recorded 2026-08-25 in the task worktree.
+Recorded 2026-08-26 in the task worktree.
 
 ```text
 .venv/bin/python -m pytest --cov=retry_safety --cov-report=term-missing
-36 passed, 1 skipped
+47 passed, 1 skipped
 TOTAL coverage: 92%
 
 .venv/bin/ruff check .
@@ -21,4 +21,5 @@ Artifact generation commands and the model-facility boundary are documented in
 `README.md` and `paper/paper.md`. The credential-free deterministic artifacts
 contain 360 core rows and 11,520 agent rows. The authenticated single-facility
 matrix contains 432 model rows; its final schema-constrained outputs are in
-`paper/artifacts/llm_matrix_traces.jsonl`, and no private reasoning is stored.
+`paper/artifacts/llm_matrix_traces.jsonl`; corrected same-key replays use the
+exact original key and contain no placeholder key. No private reasoning is stored.

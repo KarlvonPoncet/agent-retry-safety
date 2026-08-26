@@ -1063,12 +1063,13 @@ def _llm_controller(
     for step in range(2, max_steps + 1):
         prompt = _llm_prompt(task, wording, history, key, protocol_variant)
         raw = model(prompt)
-        action, use_key = _parse_action(raw)
+        action, use_same_key = _parse_action(raw)
         if action in {"invoke", "retry"}:
             operation_attempts += 1
             if operation_attempts > 1:
                 retries += 1
-            response = session.invoke(use_key)
+            retry_key = key if use_same_key else None
+            response = session.invoke(retry_key)
             _record(
                 trace,
                 step,
@@ -1076,7 +1077,7 @@ def _llm_controller(
                 response.message,
                 input_text=prompt,
                 model_output=raw,
-                key=use_key,
+                key=retry_key,
             )
             history.append(f"tool: {response.message}")
             if response.succeeded:
@@ -1090,7 +1091,6 @@ def _llm_controller(
                 status.message,
                 input_text=prompt,
                 model_output=raw,
-                key=use_key,
             )
             history.append(f"status: {status.message}")
             if status.complete:
@@ -1144,14 +1144,31 @@ def _llm_prompt(
     )
 
 
-def _parse_action(raw: str) -> tuple[str, str | None]:
+def _parse_action(raw: str) -> tuple[str, bool]:
+    """Parse only schema-valid intent; transport keys belong to the controller.
+
+    The model may request reuse semantically, but it cannot provide or invent the
+    idempotency key. The trial controller resolves that boolean against its exact
+    original key when it executes the operation.
+    """
+
     try:
         value = json.loads(raw)
-        action = str(value.get("action", "stop"))
-        use_key = value.get("use_same_key") is True
-        return action, "same-logical-operation-key" if use_key else None
-    except (json.JSONDecodeError, AttributeError, TypeError):
-        return "stop", None
+    except (json.JSONDecodeError, TypeError):
+        return "stop", False
+    if not isinstance(value, dict):
+        return "stop", False
+    if set(value) != {"action", "use_same_key"}:
+        return "stop", False
+    action = value["action"]
+    use_same_key = value["use_same_key"]
+    if (
+        not isinstance(action, str)
+        or action not in {"invoke", "retry", "reconcile", "stop"}
+        or type(use_same_key) is not bool
+    ):
+        return "stop", False
+    return action, use_same_key
 
 
 def _aggregate_agent(
