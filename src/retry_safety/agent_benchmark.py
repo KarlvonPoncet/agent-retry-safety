@@ -231,11 +231,9 @@ class VisibleStatusResponse:
 class AgentToolSession(Protocol):
     """Opaque tool interface available to an agent controller."""
 
-    def invoke(self, idempotency_key: str | None = None) -> VisibleToolResponse:
-        ...
+    def invoke(self, idempotency_key: str | None = None) -> VisibleToolResponse: ...
 
-    def read_status(self) -> VisibleStatusResponse:
-        ...
+    def read_status(self) -> VisibleStatusResponse: ...
 
 
 _ERROR_MESSAGES: dict[ErrorWording, str] = {
@@ -593,7 +591,9 @@ class AgentBenchmarkResult:
                     unsafe_retries=int(item["unsafe_retries"]),
                     successful_completions=int(item["successful_completions"]),
                     exact_final_states=int(item["exact_final_states"]),
-                    total_duplicate_side_effects=int(item["total_duplicate_side_effects"]),
+                    total_duplicate_side_effects=int(
+                        item["total_duplicate_side_effects"]
+                    ),
                     total_retries=int(item["total_retries"]),
                     total_status_reads=int(item["total_status_reads"]),
                     total_model_calls=int(item["total_model_calls"]),
@@ -610,8 +610,7 @@ class ModelAdapter(Protocol):
 
     model_name: str
 
-    def __call__(self, prompt: str) -> str:
-        ...
+    def __call__(self, prompt: str) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -830,9 +829,7 @@ def _run_trial(
     first_event = oracle.trace[0] if oracle.trace else None
     if first_event is None or task.semantics is ToolKind.READ_ONLY:
         true_commit_state = (
-            "not_applicable"
-            if task.semantics is ToolKind.READ_ONLY
-            else "committed"
+            "not_applicable" if task.semantics is ToolKind.READ_ONLY else "committed"
         )
     else:
         true_commit_state = "committed" if first_event.committed else "not_committed"

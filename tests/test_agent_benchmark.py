@@ -44,8 +44,7 @@ def test_task_families_and_held_out_tools_are_in_matrix() -> None:
     assert any(row.held_out_tool for row in result.trials)
     assert {row.semantics for row in result.trials} == set(ToolKind)
     cells = {
-        (row.task_family, row.semantics, row.held_out_tool)
-        for row in result.trials
+        (row.task_family, row.semantics, row.held_out_tool) for row in result.trials
     }
     assert all(
         (family, semantics, held_out) in cells
@@ -57,9 +56,7 @@ def test_task_families_and_held_out_tools_are_in_matrix() -> None:
 
 
 def test_opaque_oracle_trace_keeps_commit_truth_out_of_visible_observation() -> None:
-    result = run_agent_benchmark(
-        _config(controllers=(AgentControllerKind.NO_RETRY,))
-    )
+    result = run_agent_benchmark(_config(controllers=(AgentControllerKind.NO_RETRY,)))
     row = next(row for row in result.trials if row.task_id == "payment_charge")
     assert row.true_commit_state == "committed"
     assert row.observed_result == "ambiguous_error"
@@ -235,13 +232,13 @@ def test_llm_action_parser_preserves_boolean_intent_and_enforces_schema() -> Non
         '{"action":"retry","use_same_key":1}',
         '{"action":"retry","use_same_key":true,"extra":false}',
         '{"action":"unknown","use_same_key":true}',
-        '[]',
+        "[]",
     ):
         assert _parse_action(raw) == ("stop", False)
 
 
 def test_subprocess_adapter_reports_failures_and_accepts_text(tmp_path) -> None:
     script = tmp_path / "model.py"
-    script.write_text("import sys; print('{\"action\":\"stop\"}')")
+    script.write_text('import sys; print(\'{"action":"stop"}\')')
     adapter = SubprocessModelAdapter((sys.executable, str(script)))
     assert '"action":"stop"' in adapter("choose")
