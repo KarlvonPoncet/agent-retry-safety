@@ -21,6 +21,10 @@ results/
 retry-results*.json
 retry-results*.csv
 
+# The paper's committed artifacts are reproducibility fixtures, not scratch output.
+!paper/artifacts/
+!paper/artifacts/**
+
 # Editors and OS files
 .vscode/
 .idea/

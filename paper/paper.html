@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Retry Safety for Tool-Using Agents</title>
+<style>
+body { max-width: 920px; margin: 2rem auto; padding: 0 1rem;
+font: 16px/1.55 system-ui, sans-serif; color: #1d2733; }
+h1, h2, h3 { line-height: 1.2; color: #123b5d; }
+code, pre { background: #f2f5f7; border-radius: 4px; }
+code { padding: .1rem .25rem; }
+pre { padding: 1rem; overflow-x: auto; }
+pre.table { white-space: pre; }
+a { color: #075e9a; }
+</style></head><body><h1>Retry Safety for Tool-Using Agents When Commit State Is Unknown</h1>
+<p><strong>Research paper source — venue-neutral format</strong> <strong>Evidence snapshot:</strong> 2026-08-25 <strong>Repository:</strong> Retry Safety Lab</p>
+<h2>Abstract</h2>
+<p>A transport failure can erase a tool response after the server has committed an effect. A human or software client then faces an epistemic problem, not merely a networking problem: the true commit state is unknown. Blindly repeating a non-idempotent operation can create a duplicate effect, while refusing to retry can sacrifice completion. This paper presents an agent-specific benchmark for measuring that behavior without replacing a deterministic ground-truth oracle. The benchmark maps realistic payment, messaging, fulfillment, support, calendar, and lookup tasks to a replayable commit state machine; withholds the oracle&#x27;s commit bit from the controller; varies failure phase, tool paraphrases, and error wording; and records raw, machine-readable traces.</p>
+<p>The completed deterministic matrix contains 11,520 agent-controller trials (30 paired replicates, twelve matched train/held-out tools across six task families, four error wordings, and six deterministic controllers plus a three-way protocol ablation). On non-idempotent operations after commit, blind retry produced an unsafe retry in 240/240 trials (100%), whereas same-key retry, status-before-retry, the rule wrapper, and both explicit reconciliation variants produced 0/240 (0%). Removing reconciliation from the prompt-only deterministic ablation restored 240/240 unsafe retries. These are oracle-conditioned simulator results, not a claim that all deployed agents behave this way. An authenticated Codex facility was also evaluated as one non-comparative model run: 432 trials spanning all twelve tools and three protocol variants. It completed every trial with no unsafe retry, while the three variants produced identical safety and cost in this run. No second model was available without new credentials or paid access, so no model comparison is reported. The result is a reproducible measurement harness and a narrowly supported finding: explicit uncertainty handling and reconciliation can make the safety/completion trade-off observable and testable for tool-using agents, while this model ablation is a reported null result.</p>
+<h2>1. Introduction</h2>
+<p>Tool-using language models are increasingly placed in workflows that change external state: charging a card, sending a message, creating a shipment, editing a ticket, or booking an appointment. Such agents usually receive a success response or an error, and a retry instruction is easy to express in prose. The difficult case is a timeout or connection loss around the server&#x27;s commit boundary. The response does not identify whether the request was accepted. Retrying is then a decision under partial observability.</p>
+<p>This paper studies that decision, not the long-established distributed-systems observation that a blind retry can duplicate an effect. Remote procedure calls already made the uncertainty of communication failures explicit [2], and the distributed-systems literature has long separated delivery, observation, and effect. Idempotency keys and reconciliation endpoints are established engineering mechanisms [4, 5]. Our contribution is to put an agent-facing measurement boundary around those mechanisms: what the model sees, what the oracle knows, which action it chooses, and how safety, completion, and call cost trade off.</p>
+<p>We make four contributions:</p>
+<p>1. <strong>A formal vocabulary and threat model.</strong> We distinguish true commit state from observed result, operation semantics from controller policy, and safety from liveness and cost. 2. <strong>An opaque, replayable benchmark.</strong> Realistic task families and paraphrased tools are mapped to the existing deterministic state machine. The controller cannot inspect the oracle&#x27;s <code>committed</code> field. Paired failure schedules and raw traces make every reported row reproducible. 3. <strong>A mitigation and ablation.</strong> The principal mitigation is a machine-readable commit-uncertainty/reconciliation protocol. We compare it with no retry, blind retry, status-before-retry, same-key retry, and a rule-based safety wrapper, and remove the protocol transition while retaining cautionary wording. 4. <strong>Completed evidence with explicit scope.</strong> We report the full deterministic matrix and one authenticated, single-facility model matrix. We do not fabricate model diversity, and we mark any broader evaluation as future work.</p>
+<p>The research questions are:</p>
+<ul>
+<li><strong>RQ1 (unsafe behavior):</strong> How often does a controller issue an unsafe retry when the first response is ambiguous?</li>
+<li><strong>RQ2 (semantics and wording):</strong> How does that rate vary with idempotent, non-idempotent, and read-only operations; failure phase; paraphrased tools; and error wording?</li>
+<li><strong>RQ3 (mitigation):</strong> Does explicit uncertainty plus authoritative reconciliation reduce unsafe retries without sacrificing completion?</li>
+<li><strong>RQ4 (trade-off):</strong> What safety, completion, and call-cost trade-off does each controller impose?</li>
+</ul>
+<p>We evaluate the following directional hypotheses: <strong>H1</strong>, blind retry will be unsafe primarily after commit for non-idempotent operations; <strong>H2</strong>, idempotent and read-only semantics will suppress duplicate-effect failures but not necessarily unnecessary calls; <strong>H3</strong>, status, same-key, and explicit reconciliation mitigations will reduce unsafe retries relative to blind retry; and <strong>H4</strong>, safer information-seeking controllers will spend more calls, while no-retry will lose completion after a before- or after-commit ambiguity. These hypotheses document the expected consequences of the formal model rather than a preregistered analysis. Wording effects are an empirical question for the model controller; deterministic policies do not parse language and therefore provide a useful null control.</p>
+<h2>2. Related work and literature review</h2>
+<h3>2.1 Distributed calls, partial observation, and idempotency</h3>
+<p>A remote call has at least a request path, a server-side action, and a response path. Birrell and Nelson&#x27;s RPC treatment [2] is an early authoritative account of making such calls appear procedural despite communication failure. Lamport&#x27;s event-ordering framework [1] supplies the broader vocabulary for reasoning about what can and cannot be inferred from distributed observations. The FLP result [3] is not a retry algorithm and is not presented here as one; it is relevant as a boundary on what a process can conclude in an asynchronous system with faults.</p>
+<p>Engineering practice addresses the duplicate-effect consequence with idempotent API design and caller-provided request identifiers. Featonby&#x27;s AWS Builders&#x27; Library article [4] describes client request identifiers and server-side deduplication as a way to make retries safe. Stripe&#x27;s API documentation [5] specifies idempotency-key behavior for repeated requests. Both sources motivate our same-key baseline, but neither is claimed as a novel research contribution of this paper. A status or reconciliation endpoint is a complementary mechanism: it turns an unknown response into a state observation before the client attempts another mutation.</p>
+<p>Durable workflow systems make related guarantees by persisting workflow history and replaying deterministic decisions. Temporal&#x27;s workflow-execution documentation [6] is an engineering reference for durable execution, not a benchmark result. The present lab intentionally models only one operation, one commit boundary, one reliable status endpoint, and no concurrent writers; it isolates the agent&#x27;s decision under ambiguity rather than claiming to model a production workflow engine.</p>
+<h3>2.2 LLM tool use and agent reliability</h3>
+<p>ReAct [7] framed language-model interaction as an interleaving of reasoning and acting. Toolformer [8] studied learning to call external tools, and API-Bank [13] and ToolLLM [14] broadened evaluation to API selection and tool execution. These works establish why the action interface matters, but their central questions are not the hidden commit state of a previously issued side effect.</p>
+<p>AgentBench [9] evaluates language models as agents across environments, and WebArena [10] supplies a realistic web environment. SWE-bench [15] measures issue resolution in real repositories. Such benchmarks are important evidence about end-to-end agent capability, but their task success signals generally do not expose a paired, authoritative counterfactual in which the same error may correspond to either a committed or uncommitted request. Our oracle-bound row format is designed to complement, not replace, those environments.</p>
+<p>Two recent benchmarks are especially close in spirit. τ-bench evaluates tool-agent-user interaction in realistic domains [11], and ToolSandbox provides a stateful interactive tool-use benchmark [12]. We borrow the emphasis on state and tool traces while focusing narrowly on transport ambiguity, duplicate side effects, and reconciliation. The benchmark&#x27;s error messages and held-out tool names test whether a controller&#x27;s behavior depends on surface wording, while the deterministic oracle prevents a fluent but incorrect answer from being scored as success.</p>
+<p>The literature review was conducted on 2026-08-25. DOI metadata for the three archival distributed-systems papers was checked through Crossref; title, author, year, and identifier fields for the preprints were checked through the arXiv API and abstract pages; and the operational claims about idempotency and workflow execution were checked against the linked AWS, Stripe, and Temporal first-party pages. The machine-readable verification record is <code>paper/references.json</code>. No DOI, venue, page range, or model result is inferred from an unverified secondary citation.</p>
+<h2>3. Formal model and threat model</h2>
+<h3>3.1 State and observations</h3>
+<p>A trial contains an initial server state $s_0$, a target state $T$, an operation $o$, a controller $A$, and a scheduled failure phase $\phi$. The oracle&#x27;s state transition is:</p>
+<ul>
+<li><strong>before commit:</strong> the request is rejected or lost before its effect, so $s=s_0$;</li>
+<li><strong>after commit:</strong> the effect is applied, so $s=f_o(s_0)$, but the response is hidden;</li>
+<li><strong>no failure:</strong> the successful response is returned normally.</li>
+</ul>
+<p>The <strong>true commit state</strong> $C$ is <code>not_committed</code>, <code>committed</code>, or <code>not_applicable</code> for a read. The <strong>observed result</strong> $R$ is what the controller receives: <code>success</code> or an ambiguous error. On an ambiguous error, both <code>C=not_committed</code> and <code>C=committed</code> are possible from the controller&#x27;s perspective. The ground-truth trace records $C$; the opaque session does not expose it.</p>
+<p>An operation&#x27;s <strong>semantics</strong> determine what a repeated commit does. A read-only operation changes no state. An idempotent mutation satisfies $f_o(f_o(s))=f_o(s)$ for the relevant target. A non-idempotent mutation accumulates an additional logical effect. This operational definition is deliberately local; it does not claim that all real operations fit one integer counter.</p>
+<p>The <strong>observed completion</strong> is the controller&#x27;s decision that the operation is done, either from a success response or from a reliable status response. <strong>Safety</strong> is exact target state with no duplicate logical side effect. <strong>Liveness</strong> is successful completion as observed by the controller. The benchmark reports both because a no-retry controller can leave the correct state after an after-commit error while failing to establish completion, and a blind retry can report success while over-applying a non-idempotent effect.</p>
+<p>For row $i$, let $D_i$ be duplicate side effects beyond the one intended effect, $X_i$ indicate exact final-state correctness, $L_i$ indicate successful completion, and $K_i$ be the cost. The primary unsafe-retry indicator is $U_i=1[D_i&gt;0]$; its rate is $\hat U=\sum_i U_i/n$. Call cost uses one unit per operation attempt, two per status read, and four per model decision. The latter is a transparent proxy, not a provider price. Wilson 95% intervals are generated for binary rates; means and raw rows are also retained.</p>
+<h3>3.2 Threat model and scope</h3>
+<p>The controller is an autonomous worker that can invoke one tool and, when offered, read authoritative status. The transport may fail immediately before the server commit or immediately after it, and the controller receives the same class of ambiguous failure. A caller-provided logical operation key is available to the same-key and protocol controllers. The status endpoint is reliable and authoritative in this lab.</p>
+<p>The threat is an accidental duplicate external effect caused by a controller that treats an unknown result as a known failure and sends a non-deduplicated replay. This is an integrity and reliability threat, not an adversarial prompt-injection threat. We do not model malicious servers, concurrent writers, stale status, partial responses, authorization failure, side-channel leakage, compensation, or a model intentionally attacking the tool. Those are important but separate threats.</p>
+<h2>4. Benchmark design</h2>
+<h3>4.1 Tasks, tools, and held-out surface forms</h3>
+<p>The benchmark uses six semantic task families:</p>
+<pre class="table">| Family | Tool surface | Oracle semantics | Held out? |
+
+<pre class="table">|---|---|---|---|
+
+<pre class="table">| payment | `charge_card` | non-idempotent mutation | no |
+
+<pre class="table">| payment | `debit_payment_method` | non-idempotent mutation | yes |
+
+<pre class="table">| messaging | `send_email` | non-idempotent mutation | no |
+
+<pre class="table">| messaging | `dispatch_notification` | non-idempotent mutation | yes |
+
+<pre class="table">| fulfillment | `create_shipment` | non-idempotent mutation | no |
+
+<pre class="table">| fulfillment | `book_parcel` | non-idempotent mutation | yes |
+
+<pre class="table">| support | `set_ticket_status` | idempotent mutation | no |
+
+<pre class="table">| support | `update_case_state` | idempotent mutation | yes |
+
+<pre class="table">| calendar | `upsert_event` | idempotent mutation | no |
+
+<pre class="table">| calendar | `ensure_meeting` | idempotent mutation | yes |
+
+<pre class="table">| lookup | `lookup_order` | read-only | no |
+
+<pre class="table">| lookup | `read_purchase_state` | read-only | yes |
+
+<p>The names and natural-language descriptions vary independently of the oracle semantics. Each family has one training tool and one held-out paraphrase, and the six held-out tool names are not special-cased by deterministic policies. The operation families are intentionally ordinary examples where accidental duplication has different practical consequences; the simulator does not contact a payment, mail, shipping, calendar, or support provider.</p>
+<h3>4.2 Failure schedules and wording</h3>
+<p>Failure phases are <code>before_commit</code>, <code>after_commit</code>, and <code>none</code>. A seeded schedule assigns phases by replicate and is written to <code>agent_manifest.json</code>; every controller, task, and wording in a replicate receives the same assignment. The completed deterministic matrix uses seed 20260825, 30 replicates, and a 1.0 failure probability for scheduled failures, producing ten replicates per phase. The core lab matrix uses seed 42, 30 replicates, and its original three tools and four policies as a regression-ground-truth run.</p>
+<p>The four controller-visible wordings are:</p>
+<p>1. “Request timed out before a result was received.” 2. “Connection closed before the tool returned a result.” 3. “Service unavailable; the request may have completed.” 4. “No confirmation arrived. Check whether the change took effect before repeating.”</p>
+<p>The fourth is a held-out wording. No wording is allowed to reveal the oracle&#x27;s commit bit. For deterministic policies, wording is a stratification factor and a null sensitivity control. For the model run, wording is inserted into the prompt and retained verbatim in the raw trace.</p>
+<h3>4.3 Controllers and the explicit protocol</h3>
+<p>The benchmark includes these controllers:</p>
+<ul>
+<li><strong>No retry:</strong> issue once and stop.</li>
+<li><strong>Blind retry:</strong> repeat without a status check or key until success or the attempt limit.</li>
+<li><strong>Status-before-retry:</strong> read status after ambiguity and retry without a key only if the target is absent.</li>
+<li><strong>Same-key retry:</strong> repeat the logical request with the same idempotency key.</li>
+<li><strong>Rule safety wrapper:</strong> reconcile after ambiguity and use the same key only if the target is absent.</li>
+<li><strong>Uncertainty protocol:</strong> represent the state as <code>unknown</code>, call authoritative <code>read_status</code>, complete if <code>committed</code>, retry once with the same key if <code>not_committed</code>, and stop/escalate if still unknown.</li>
+<li><strong>LLM controller:</strong> request one schema-constrained JSON action at each decision point from an external model adapter.</li>
+</ul>
+<p>The protocol is deliberately machine-readable:</p>
+<pre><code>
+{
+
+  &quot;protocol_id&quot;: &quot;commit-uncertainty-reconciliation-v1&quot;,
+
+  &quot;state_space&quot;: [&quot;unknown&quot;, &quot;committed&quot;, &quot;not_committed&quot;],
+
+  &quot;on_ambiguous_result&quot;: &quot;unknown&quot;,
+
+  &quot;reconcile&quot;: {&quot;action&quot;: &quot;read_status&quot;, &quot;authoritative&quot;: true},
+
+  &quot;if_committed&quot;: &quot;complete_without_retry&quot;,
+
+  &quot;if_not_committed&quot;: &quot;retry_once_with_same_key&quot;,
+
+  &quot;if_still_unknown&quot;: &quot;stop_and_escalate&quot;
+
+}
+
+</code></pre>
+<p>The ablation has three variants. <code>machine_readable</code> provides the state/action transitions above. <code>natural_language</code> preserves the same reconciliation transition but expresses it as prose. <code>prompt_only</code> retains cautionary wording but removes the reconciliation transition and falls back to a blind replay. Thus the comparison separates transition structure from surface wording; it is not a claim that a particular prompt string alone causes a model effect.</p>
+<h3>4.4 Oracle and trace boundary</h3>
+<p>Every trial instantiates the existing <code>DeterministicToolSession</code> rather than a second simulator. The new opaque adapter exposes only success, an ambiguous error message, and a status-complete boolean. The hidden <code>committed</code> bit, final integer state, logical side-effect count, and oracle trace are retained for scoring. Each row stores the controller-visible event sequence, the final model action text when a model is used, and the oracle trace. The adapter stores final schema-constrained output only; private chain-of-thought is neither requested nor committed.</p>
+<h2>5. Methodology and reproducibility</h2>
+<p>The deterministic experiment is a complete factorial run. Replicates are paired by schedule, not sampled independently for each policy. For every row we score duplicate effects, exact final state, completion, retries, status reads, model decisions, calls, and proxy cost. A result is never judged by a model: the simulator state is authoritative.</p>
+<p>The model adapter is intentionally provider-neutral. An authenticated Codex CLI facility was available in this environment. <code>scripts/codex_action.sh</code> invokes it in read-only, ephemeral mode with <code>paper/action_schema.json</code>; stdout is the schema-constrained final JSON action and stderr is discarded. The model matrix pins the selected model in its manifest, runs three paired replicates, and includes all twelve matched tools, four wordings, three protocol variants, and the three schedule phases. It contains 432 rows. The benchmark performs the initial operation before exposing its ambiguous result to the model, so every recorded model decision follows a real tool observation. This is a single-facility evaluation, not a model comparison. The full deterministic benchmark remains the primary evidence because it is replayable without credentials.</p>
+<p>The analysis script groups raw rows by controller, protocol variant, family, semantics, held-out status, wording, and failure phase. It writes <code>summary.csv</code> with Wilson intervals and <code>unsafe_retry_rate.svg</code>. The exact raw input/output artifacts are under <code>paper/artifacts/</code>; every reported count in this paper is regenerated from those files.</p>
+<h2>6. Results</h2>
+<h3>6.1 Deterministic controller results</h3>
+<p>The primary safety result is stratified to the condition where duplicate effects are possible: non-idempotent tasks after commit. Each deterministic cell has 240 paired rows (six matched train/held-out tools, four wordings, ten schedule replicates).</p>
+<pre class="table">| Controller | Protocol variant | Unsafe retries | Completion | Exact state | Mean cost |
+
+<pre class="table">|---|---:|---:|---:|---:|---:|
+
+<pre class="table">| no retry | none | 0/240 (0%) | 0% | 100% | 1.0 |
+
+<pre class="table">| blind retry | none | 240/240 (100%) | 100% | 0% | 2.0 |
+
+<pre class="table">| status-before-retry | none | 0/240 (0%) | 100% | 100% | 3.0 |
+
+<pre class="table">| same-key retry | none | 0/240 (0%) | 100% | 100% | 2.0 |
+
+<pre class="table">| rule safety wrapper | none | 0/240 (0%) | 100% | 100% | 3.0 |
+
+<pre class="table">| uncertainty protocol | machine-readable | 0/240 (0%) | 100% | 100% | 3.0 |
+
+<pre class="table">| uncertainty protocol | natural-language | 0/240 (0%) | 100% | 100% | 3.0 |
+
+<pre class="table">| uncertainty protocol | prompt-only | 240/240 (100%) | 100% | 0% | 2.0 |
+
+<p>The zero-width-looking rates are exact simulator frequencies, not claims of zero probability in deployment. With 240 observations, the Wilson 95% interval for a zero rate extends to approximately 1.6%; the corresponding interval for 240/240 begins at approximately 98.4%. The analysis output contains the exact interval for every smaller stratum.</p>
+<p>The result supports H1 and H3 in this threat model. Blind retry completes but violates safety after commit. No retry preserves state after an after-commit failure but does not establish completion. Status and protocol controllers pay one status read and avoid a duplicate. Same-key retry pays only a second operation attempt and avoids duplication because the oracle deduplicates the logical key. The prompt-only ablation demonstrates why “be careful” without a transition that converts unknown into a status query is insufficient.</p>
+<p>For before-commit ambiguity, blind retry, same-key retry, status, the rule wrapper, and both structured protocol variants all completed the non-idempotent task with exact state and zero duplicates. No retry completed 0% of these rows. The safe controllers that check status paid a mean cost of 4.0 in this phase (operation, status, retry); blind and same-key retry paid 2.0. This is the expected safety/completion/cost trade-off rather than a surprising distributed-systems result.</p>
+<h3>6.2 Semantics, surface forms, and failure phase</h3>
+<p>Across the full 11,520-row matrix, duplicate effects occurred only when the operation semantics were non-idempotent and the controller replayed without a same key or reconciliation. Read-only and idempotent tasks therefore provide negative controls: they show that a safe final state does not establish that a controller understood the uncertainty, and that repeated calls can still incur cost. Every task family and semantics cell has matched train and held-out surface forms. Held-out tool names did not change deterministic policy behavior, as expected.</p>
+<p>The deterministic wording strata are identical because deterministic policies consume the error as a boolean ambiguous signal. That null result is useful: any wording sensitivity in a model run cannot be attributed to a change in the oracle schedule. It does not establish wording invariance for agents.</p>
+<h3>6.3 Authenticated single-model matrix</h3>
+<p>The one available model facility was evaluated with all twelve matched tools, all four wordings, three protocol variants, and three schedule replicates. On non-idempotent after-commit rows, every variant completed 24/24 with exact final state and 0/24 unsafe retries. Across variants, each wording stratum completed 18/18 with no unsafe retry, and train and held-out non-idempotent surfaces each completed 36/36 with no unsafe retry. Before commit, every variant completed 24/24 with exact state and no duplicates. It is important not to overinterpret this: the adapter enforced a strict action schema, and the run used one authenticated facility without a second model or independent random schedules.</p>
+<p>The model used a mean cost of 9.5 on non-idempotent failure rows under the lab proxy, compared with 2.0 for same-key retry and 3.5 across the corresponding status/protocol failure rows. After the benchmark&#x27;s initial operation produced an ambiguous observation, the model reconciled once in every non-idempotent failure row; it retried once before commit and stopped after reconciliation confirmed an after-commit effect. Machine-readable, natural-language, and prompt-only variants therefore had identical safety, completion, and cost in these cells. This null ablation result does not show that protocol representation is irrelevant beyond this model and matrix. No private reasoning was recorded.</p>
+<h2>7. Error analysis and mitigation ablation</h2>
+<p>There are two distinct failure modes in the deterministic traces. First, blind retry converts an after-commit ambiguous error into a second non-deduplicated commit. The oracle trace has <code>ambiguous_error_after_commit</code>, followed by <code>success</code>; the controller-visible trace has only an error and later success. Second, no retry treats an unresolved observation as terminal: its final state can be correct, but its <code>successful_completion</code> is false. These cases explain why exact final state alone is an inadequate agent metric.</p>
+<p>The protocol trace makes the epistemic transition explicit: <code>unknown</code> is not “failed”; it triggers <code>protocol_reconcile</code>. If reconciliation says the target is present, the controller completes without retry. If it is absent, the same logical key is used for a retry. The natural-language variant has the same oracle calls and outcomes as the machine-readable variant in this deterministic controller, showing that wording does not matter when the transition is hard-coded. The prompt-only variant removes the transition and duplicates after commit. This is a structural ablation: it tests whether an explicit state/action protocol is necessary, while leaving semantics, schedules, and wordings paired.</p>
+<p>The LLM traces add a different error-analysis observation. The model never emitted <code>stop</code> in the completed matrix, and its final JSON outputs were valid enough for the adapter to execute. Its first decision always followed the initial tool observation. For the non-idempotent failure cells it selected reconciliation, followed by one retry before commit, and avoided duplicate effects in all three protocol variants. The absence of an ablation difference is why the model evidence is labeled completed single-model evidence rather than support for a model-general mitigation effect.</p>
+<h2>8. Threats to validity</h2>
+<p><strong>Construct validity.</strong> An integer counter is a compact proxy for payments, email, shipments, and other effects. It proves the semantics of the benchmark operation, not the behavior of an external provider. The cost weights are deliberately illustrative. “Unsafe retry” is operationalized as a duplicate effect, so a controller could make a risky decision that happens not to duplicate under a read-only tool and still score zero on that metric.</p>
+<p><strong>Internal validity.</strong> Pairing schedules controls the principal confounder. The oracle is deterministic and tests cover its before/after commit semantics, key deduplication, replay, manifests, scoring, and adapters. The model matrix is not deterministic with respect to model service behavior; its raw final outputs are retained, but an external service may change. The exact model identifier is recorded in <code>llm_matrix_manifest.json</code>.</p>
+<p><strong>External validity.</strong> The benchmark has one mutation, one status endpoint, no concurrency, and a small task vocabulary. It does not support claims about production payment safety, all model families, stale reconciliation, retries after multiple failures, or multi-agent races. The single-model run is not a comparison and should not be generalized to deployed agents.</p>
+<p><strong>Statistical validity.</strong> Deterministic rates are exact finite-matrix frequencies; Wilson intervals describe binomial sampling uncertainty as a readable convention, not uncertainty in the oracle&#x27;s behavior. Model cells have only three replicates for each schedule phase and task/wording stratum. Larger model runs and repeated model snapshots are needed for stable estimates.</p>
+<p><strong>Literature validity.</strong> The review is traceable and separates archival papers, preprints, and first-party engineering documentation. It does not claim that a benchmark&#x27;s existence proves a result about retry safety. Reference metadata and verification URLs are committed separately.</p>
+<h2>9. Ethics and responsible disclosure</h2>
+<p>The experiment uses synthetic state and does not contact payment, messaging, shipping, calendar, or support systems. It therefore creates no financial charge, duplicate shipment, customer message, or personal-data exposure. The model adapter records only prompts and final schema-constrained actions needed to reproduce decisions; it does not store hidden reasoning. The benchmark should be used as a pre-deployment test and design aid, not as a reason to enable retries against a real provider without provider-specific idempotency and reconciliation guarantees.</p>
+<p>The engineering mitigation is responsible disclosure by design: expose operation semantics, document ambiguous outcomes, provide authoritative status, and require an idempotency key where a repeated request can have an external effect. If an implementation lacks those mechanisms, the safe fallback is to preserve uncertainty and escalate rather than silently replay.</p>
+<h2>10. Limitations and future evaluation</h2>
+<p>The completed evidence does not include concurrent writers, stale or unavailable status, multiple ambiguous failures, partial response bodies, compensating transactions, or non-integer resource identities. It does not compare multiple LLM providers or models. A broader model-diverse evaluation would require additional authenticated facilities or paid access; that evaluation is intentionally unexecuted and no comparison is claimed here. The infrastructure and one model pilot/matrix are complete so that a future keyed decision can specify models, repetitions, expected cost, and evidentiary gain before any paid run.</p>
+<p>Future work should add a status endpoint that can be stale, multiple logical operations in one workflow, concurrent agents, conditional writes, transactional outboxes, delayed responses, and tool-specific authentication errors. Model studies should repeat the same manifest across pinned model versions, measure calibration of “unknown” decisions, and test protocol variants as a factorial prompt/structure experiment rather than treating one successful model matrix as sufficient.</p>
+<h2>11. Conclusion</h2>
+<p>Commit ambiguity is an agent decision boundary: the same visible transport error can follow either a committed or an uncommitted effect. In the completed deterministic benchmark, blind retry duplicated every non-idempotent after-commit effect, while status, same-key, rule-wrapper, and explicit reconciliation controllers preserved exact state and completion. Removing reconciliation from the protocol ablation restored the unsafe behavior. These observations operationalize, rather than rediscover, the established distributed-systems fact that blind retries can duplicate effects.</p>
+<p>The agent-specific contribution is a controlled way to measure how a controller responds to that fact. The opaque interface prevents hidden ground truth from leaking; paired schedules isolate controller choices; semantic and wording strata reveal what changes; and raw traces preserve the evidence. One authenticated model matrix completed every cell safely, with no observed difference among protocol variants, and supplies no model-general comparison. The practical conclusion is correspondingly narrow: agent evaluations should score true state, observed completion, duplicate effects, and cost separately, and uncertainty/reconciliation protocols should be tested before granting an agent authority over non-idempotent tools.</p>
+<h2>12. Reproducibility statement</h2>
+<p>The source is Python 3.11+ with no runtime dependency. From a clean checkout:</p>
+<pre><code>
+python3.11 -m venv .venv
+
+.venv/bin/python -m pip install -e &#x27;.[dev]&#x27;
+
+.venv/bin/python -m pytest
+
+.venv/bin/ruff check .
+
+</code></pre>
+<p>Run the original deterministic core matrix and the agent matrix:</p>
+<pre><code>
+.venv/bin/retry-safety --seed 42 --trials 30 \
+
+  --json paper/artifacts/deterministic_core.json \
+
+  --csv paper/artifacts/deterministic_core.csv
+
+.venv/bin/retry-safety-agent --seed 20260825 --trials 30 \
+
+  --json paper/artifacts/agent_benchmark.json \
+
+  --manifest paper/artifacts/agent_manifest.json \
+
+  --trace-jsonl paper/artifacts/agent_traces.jsonl
+
+.venv/bin/python scripts/analyze_results.py \
+
+  paper/artifacts/agent_benchmark.json paper/artifacts/analysis
+
+</code></pre>
+<p>The authenticated one-model run requires an already authenticated Codex CLI and does not buy credentials or start a subscription. It is intentionally separate from the credential-free deterministic command:</p>
+<pre><code>
+RETRY_SAFETY_CODEX_MODEL=&lt;authenticated-model-id&gt; \
+
+  .venv/bin/python scripts/run_llm_matrix.py
+
+.venv/bin/python scripts/analyze_results.py \
+
+  paper/artifacts/llm_matrix.json paper/artifacts/llm_analysis
+
+</code></pre>
+<p>The committed <code>paper/artifacts/</code> directory contains the manifests, raw JSON trials, JSONL traces, regenerated CSV tables, and SVG figure. <code>paper/references.json</code> records source verification. Build the paper locally with:</p>
+<pre><code>
+make -C paper
+
+</code></pre>
+<p>The paper source is <code>paper/paper.md</code>; <code>paper/paper.html</code> is a generated local rendering and is not required for the benchmark. The artifact files are sufficient to regenerate every reported number without model access; model traces preserve final outputs but not private reasoning.</p>
+<h2>References</h2>
+<p>[1] Leslie Lamport. 1978. “Time, clocks, and the ordering of events in a distributed system.” *Communications of the ACM* 21(7), 558–565. DOI: 10.1145/359545.359563. https://doi.org/10.1145/359545.359563</p>
+<p>[2] Andrew D. Birrell and Bruce Jay Nelson. 1984. “Implementing remote procedure calls.” *ACM Transactions on Computer Systems* 2(1), 39–59. DOI: 10.1145/2080.357392. https://doi.org/10.1145/2080.357392</p>
+<p>[3] Michael J. Fischer, Nancy A. Lynch, and Michael S. Paterson. 1985. “Impossibility of distributed consensus with one faulty process.” *Journal of the ACM* 32(2), 374–382. DOI: 10.1145/3149.214121. https://doi.org/10.1145/3149.214121</p>
+<p>[4] Malcolm Featonby. n.d. “Making retries safe with idempotent APIs.” *AWS Builders&#x27; Library*. https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/</p>
+<p>[5] Stripe. n.d. “Idempotent requests.” *Stripe API Reference*. https://docs.stripe.com/api/idempotent_requests</p>
+<p>[6] Temporal Technologies. n.d. “Workflow Execution overview.” *Temporal Documentation*. https://docs.temporal.io/workflow-execution</p>
+<p>[7] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2022. “ReAct: Synergizing reasoning and acting in language models.” arXiv:2210.03629. https://arxiv.org/abs/2210.03629</p>
+<p>[8] Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom. 2023. “Toolformer: Language models can teach themselves to use tools.” arXiv:2302.04761. https://arxiv.org/abs/2302.04761</p>
+<p>[9] Xiao Liu et al. 2023. “AgentBench: Evaluating LLMs as agents.” arXiv:2308.03688. https://arxiv.org/abs/2308.03688</p>
+<p>[10] Shuyan Zhou et al. 2023. “WebArena: A realistic web environment for building autonomous agents.” arXiv:2307.13854. https://arxiv.org/abs/2307.13854</p>
+<p>[11] Shunyu Yao, Noah Shinn, Pedram Razavi, and Karthik Narasimhan. 2024. “τ-bench: A benchmark for tool-agent-user interaction in real-world domains.” arXiv:2406.12045. https://arxiv.org/abs/2406.12045</p>
+<p>[12] Jiarui Lu et al. 2024. “ToolSandbox: A stateful, conversational, interactive evaluation benchmark for LLM tool use capabilities.” arXiv:2408.04682. https://arxiv.org/abs/2408.04682</p>
+<p>[13] Minghao Li et al. 2023. “API-Bank: A comprehensive benchmark for tool-augmented LLMs.” arXiv:2304.08244. https://arxiv.org/abs/2304.08244</p>
+<p>[14] Yujia Qin et al. 2023. “ToolLLM: Facilitating large language models to master 16000+ real-world APIs.” arXiv:2307.16789. https://arxiv.org/abs/2307.16789</p>
+<p>[15] Carlos E. Jimenez et al. 2023. “SWE-bench: Can language models resolve real-world GitHub issues?” arXiv:2310.06770. https://arxiv.org/abs/2310.06770</p></body></html>

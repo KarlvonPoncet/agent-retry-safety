@@ -2,7 +2,7 @@ A payment provider can return `timeout` after it has accepted a charge. An AI ag
 
 # Retry Safety Lab
 
-Retry Safety Lab is a small educational research simulator for that failure mode. It studies how deterministic agent/controller policies behave when a tool reports an ambiguous timeout or error around its commit point. It is deliberately not an LLM benchmark: the state machine is the ground truth, so every result is reproducible and easy to inspect.
+Retry Safety Lab is a small educational research simulator for that failure mode. It studies how deterministic agent/controller policies behave when a tool reports an ambiguous timeout or error around its commit point. Its deterministic state machine remains the ground truth, so the original core is reproducible and easy to inspect. The repository also contains an opaque agent benchmark that evaluates controllers against that same oracle without exposing commit truth.
 
 ## The idea in plain language
 
@@ -59,7 +59,7 @@ ExperimentConfig (seed, trials, phases, policies)
           JSON / CSV / UI adapter
 ```
 
-The controller uses a small typed `ToolSession` protocol. A future LLM controller can implement the same `invoke()` and `read_status()` interface without changing the simulator or ground-truth metrics. No paid model call is made by this project.
+The controller uses a small typed `ToolSession` protocol. An optional agent adapter can implement the same `invoke()` and `read_status()` boundary without changing the simulator or ground-truth metrics. The credential-free core makes no model calls; the completed optional single-facility run is documented below and is not a model comparison.
 
 ## Stable Python integration contract
 
@@ -209,9 +209,49 @@ The tests cover before- and after-commit behavior, duplicate detection, all four
 .venv/bin/ruff check .
 ```
 
+## Agent benchmark and paper
+
+The agent-facing extension is `retry_safety.agent_benchmark`. It keeps the existing `DeterministicToolSession` as the oracle and adds realistic payment, messaging, fulfillment, support, calendar, and lookup task families; matched train/held-out tool surface forms for every family and operation semantics; four error wordings; paired failure schedules; deterministic baselines; a rule safety wrapper; and a machine-readable commit-uncertainty/reconciliation protocol. The controller-visible adapter never returns the simulator's `committed` field. Raw final model actions and oracle traces are retained in JSON artifacts; private model reasoning is not recorded.
+
+Run the full credential-free deterministic agent matrix and regenerate its table and SVG figure:
+
+```sh
+.venv/bin/retry-safety-agent --seed 20260825 --trials 30 \
+  --json paper/artifacts/agent_benchmark.json \
+  --manifest paper/artifacts/agent_manifest.json \
+  --trace-jsonl paper/artifacts/agent_traces.jsonl
+.venv/bin/python scripts/analyze_results.py \
+  paper/artifacts/agent_benchmark.json paper/artifacts/analysis
+```
+
+The original deterministic core matrix remains available and is used as a regression oracle:
+
+```sh
+.venv/bin/retry-safety --seed 42 --trials 30 \
+  --json paper/artifacts/deterministic_core.json \
+  --csv paper/artifacts/deterministic_core.csv
+```
+
+An LLM adapter is optional and provider-neutral. The completed single-facility run used an already authenticated Codex CLI, with schema-constrained final JSON only. It does not buy credentials or start a subscription, and no model comparison is claimed:
+
+```sh
+RETRY_SAFETY_CODEX_MODEL=<authenticated-model-id> \
+  .venv/bin/python scripts/run_llm_matrix.py
+.venv/bin/python scripts/analyze_results.py \
+  paper/artifacts/llm_matrix.json paper/artifacts/llm_analysis
+```
+
+The research paper is maintained as Markdown and builds to local HTML without extra runtime dependencies:
+
+```sh
+make -C paper
+```
+
+`paper/paper.md` contains the abstract, research questions and hypotheses, formal model, related work, benchmark, methods, results, error analysis, mitigation ablations, validity threats, ethics, limitations, conclusion, references, and reproducibility statement. `paper/references.json` records verification URLs and dates for every cited source. `paper/artifacts/` contains the raw manifests/traces and regenerated analysis outputs used by the paper.
+
 ## Limitations
 
-This is an educational core, not a production payment simulator. It has one logical operation, one state value, one injected failure, a reliable status endpoint, and no network timing, concurrent writers, partial responses, server outage, authentication, or compensation transaction. The policy controllers are deterministic and do not measure language-model comprehension. The cost function is illustrative rather than a claim about provider pricing. Results are only as broad as the explicit matrix and schedule in `ExperimentConfig`.
+This is an educational core, not a production payment simulator. Each trial has one logical operation, one state value, one injected failure, a reliable status endpoint, and no network timing, concurrent writers, partial responses, server outage, authentication, or compensation transaction. The credential-free policy controllers are deterministic; the optional model adapter measures actions from an external controller, not private reasoning or general language comprehension. The cost function is illustrative rather than a claim about provider pricing. Results are only as broad as the explicit core or agent benchmark matrix and schedule.
 
 ## Research extensions
 
@@ -222,7 +262,7 @@ Useful next experiments include:
 - tools with conditional writes, leases, compare-and-swap, or transactional outboxes;
 - richer non-idempotent effects such as append, email, shipment, and payment authorization;
 - controller policies that maintain uncertainty explicitly instead of treating every error alike;
-- an LLM controller evaluated against the same simulator, with tool traces and state as ground truth;
+- broader pinned-model LLM evaluations against the same simulator, with tool traces and state as ground truth;
 - confidence intervals, cost distributions, and factorial analysis over failure rate and retry budget.
 
 ## Related context

@@ -118,7 +118,7 @@ def _write_csv(path: Path, result: ExperimentResult) -> None:
         "cost",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for trial in result.trials:
             row = trial.to_dict()
