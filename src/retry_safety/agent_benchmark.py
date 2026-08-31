@@ -231,11 +231,9 @@ class VisibleStatusResponse:
 class AgentToolSession(Protocol):
     """Opaque tool interface available to an agent controller."""
 
-    def invoke(self, idempotency_key: str | None = None) -> VisibleToolResponse:
-        ...
+    def invoke(self, idempotency_key: str | None = None) -> VisibleToolResponse: ...
 
-    def read_status(self) -> VisibleStatusResponse:
-        ...
+    def read_status(self) -> VisibleStatusResponse: ...
 
 
 _ERROR_MESSAGES: dict[ErrorWording, str] = {
@@ -593,7 +591,9 @@ class AgentBenchmarkResult:
                     unsafe_retries=int(item["unsafe_retries"]),
                     successful_completions=int(item["successful_completions"]),
                     exact_final_states=int(item["exact_final_states"]),
-                    total_duplicate_side_effects=int(item["total_duplicate_side_effects"]),
+                    total_duplicate_side_effects=int(
+                        item["total_duplicate_side_effects"]
+                    ),
                     total_retries=int(item["total_retries"]),
                     total_status_reads=int(item["total_status_reads"]),
                     total_model_calls=int(item["total_model_calls"]),
@@ -610,8 +610,7 @@ class ModelAdapter(Protocol):
 
     model_name: str
 
-    def __call__(self, prompt: str) -> str:
-        ...
+    def __call__(self, prompt: str) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -830,9 +829,7 @@ def _run_trial(
     first_event = oracle.trace[0] if oracle.trace else None
     if first_event is None or task.semantics is ToolKind.READ_ONLY:
         true_commit_state = (
-            "not_applicable"
-            if task.semantics is ToolKind.READ_ONLY
-            else "committed"
+            "not_applicable" if task.semantics is ToolKind.READ_ONLY else "committed"
         )
     else:
         true_commit_state = "committed" if first_event.committed else "not_committed"
@@ -1063,12 +1060,13 @@ def _llm_controller(
     for step in range(2, max_steps + 1):
         prompt = _llm_prompt(task, wording, history, key, protocol_variant)
         raw = model(prompt)
-        action, use_key = _parse_action(raw)
+        action, use_same_key = _parse_action(raw)
         if action in {"invoke", "retry"}:
             operation_attempts += 1
             if operation_attempts > 1:
                 retries += 1
-            response = session.invoke(use_key)
+            retry_key = key if use_same_key else None
+            response = session.invoke(retry_key)
             _record(
                 trace,
                 step,
@@ -1076,7 +1074,7 @@ def _llm_controller(
                 response.message,
                 input_text=prompt,
                 model_output=raw,
-                key=use_key,
+                key=retry_key,
             )
             history.append(f"tool: {response.message}")
             if response.succeeded:
@@ -1090,7 +1088,6 @@ def _llm_controller(
                 status.message,
                 input_text=prompt,
                 model_output=raw,
-                key=use_key,
             )
             history.append(f"status: {status.message}")
             if status.complete:
@@ -1144,14 +1141,31 @@ def _llm_prompt(
     )
 
 
-def _parse_action(raw: str) -> tuple[str, str | None]:
+def _parse_action(raw: str) -> tuple[str, bool]:
+    """Parse only schema-valid intent; transport keys belong to the controller.
+
+    The model may request reuse semantically, but it cannot provide or invent the
+    idempotency key. The trial controller resolves that boolean against its exact
+    original key when it executes the operation.
+    """
+
     try:
         value = json.loads(raw)
-        action = str(value.get("action", "stop"))
-        use_key = value.get("use_same_key") is True
-        return action, "same-logical-operation-key" if use_key else None
-    except (json.JSONDecodeError, AttributeError, TypeError):
-        return "stop", None
+    except (json.JSONDecodeError, TypeError):
+        return "stop", False
+    if not isinstance(value, dict):
+        return "stop", False
+    if set(value) != {"action", "use_same_key"}:
+        return "stop", False
+    action = value["action"]
+    use_same_key = value["use_same_key"]
+    if (
+        not isinstance(action, str)
+        or action not in {"invoke", "retry", "reconcile", "stop"}
+        or type(use_same_key) is not bool
+    ):
+        return "stop", False
+    return action, use_same_key
 
 
 def _aggregate_agent(

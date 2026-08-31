@@ -1,6 +1,8 @@
 import json
 import sys
 
+import pytest
+
 from retry_safety import (
     AgentBenchmarkConfig,
     AgentControllerKind,
@@ -15,7 +17,8 @@ from retry_safety import (
     run_agent_benchmark,
     uncertainty_protocol,
 )
-from retry_safety.agent_benchmark import SubprocessModelAdapter
+from retry_safety.agent_benchmark import SubprocessModelAdapter, _parse_action
+from retry_safety.simulator import DeterministicToolSession
 
 
 def _config(**overrides):
@@ -41,8 +44,7 @@ def test_task_families_and_held_out_tools_are_in_matrix() -> None:
     assert any(row.held_out_tool for row in result.trials)
     assert {row.semantics for row in result.trials} == set(ToolKind)
     cells = {
-        (row.task_family, row.semantics, row.held_out_tool)
-        for row in result.trials
+        (row.task_family, row.semantics, row.held_out_tool) for row in result.trials
     }
     assert all(
         (family, semantics, held_out) in cells
@@ -54,9 +56,7 @@ def test_task_families_and_held_out_tools_are_in_matrix() -> None:
 
 
 def test_opaque_oracle_trace_keeps_commit_truth_out_of_visible_observation() -> None:
-    result = run_agent_benchmark(
-        _config(controllers=(AgentControllerKind.NO_RETRY,))
-    )
+    result = run_agent_benchmark(_config(controllers=(AgentControllerKind.NO_RETRY,)))
     row = next(row for row in result.trials if row.task_id == "payment_charge")
     assert row.true_commit_state == "committed"
     assert row.observed_result == "ambiguous_error"
@@ -134,8 +134,111 @@ def test_llm_runs_protocol_ablation_and_counts_only_repeat_invocations() -> None
     assert all(row.retries == 1 for row in rows)
 
 
+@pytest.mark.parametrize("action", ["retry", "invoke"])
+@pytest.mark.parametrize(
+    "variant",
+    [
+        ProtocolVariant.MACHINE_READABLE,
+        ProtocolVariant.NATURAL_LANGUAGE,
+        ProtocolVariant.PROMPT_ONLY,
+    ],
+)
+def test_llm_same_key_intent_reuses_the_trial_key_for_all_protocol_aliases(
+    action: str, variant: ProtocolVariant
+) -> None:
+    def fake_model(prompt: str) -> str:
+        return json.dumps({"action": action, "use_same_key": True})
+
+    result = run_agent_benchmark(
+        _config(
+            trials=1,
+            controllers=(AgentControllerKind.LLM,),
+            failure_phases=(FailurePhase.AFTER_COMMIT,),
+            protocol_variants=(variant,),
+            max_attempts=2,
+        ),
+        model=fake_model,
+    )
+
+    for row in result.trials:
+        initial_key = row.trace[0].idempotency_key
+        assert initial_key == f"agent-{row.seed}-{row.task_id}"
+        assert row.trace[1].action == action
+        assert row.trace[1].idempotency_key == initial_key
+        operation_events = [
+            event for event in row.oracle_trace if event.event != "status_read"
+        ]
+        assert all(event.idempotency_key == initial_key for event in operation_events)
+    non_idempotent = [
+        row
+        for row in result.trials
+        if row.semantics is ToolKind.NON_IDEMPOTENT_MUTATION
+    ]
+    assert all(row.duplicate_side_effects == 0 for row in non_idempotent)
+
+
+@pytest.mark.parametrize("action", ["retry", "invoke"])
+def test_llm_false_same_key_intent_does_not_reuse_key(action: str) -> None:
+    def fake_model(prompt: str) -> str:
+        return json.dumps({"action": action, "use_same_key": False})
+
+    result = run_agent_benchmark(
+        _config(
+            trials=1,
+            controllers=(AgentControllerKind.LLM,),
+            failure_phases=(FailurePhase.AFTER_COMMIT,),
+            protocol_variants=(ProtocolVariant.MACHINE_READABLE,),
+            max_attempts=2,
+        ),
+        model=fake_model,
+    )
+
+    for row in result.trials:
+        assert row.trace[1].idempotency_key is None
+    non_idempotent = [
+        row
+        for row in result.trials
+        if row.semantics is ToolKind.NON_IDEMPOTENT_MUTATION
+    ]
+    assert all(row.unsafe_retry for row in non_idempotent)
+
+
+def test_after_commit_wrong_key_replay_is_detected_as_unsafe() -> None:
+    session = DeterministicToolSession(
+        tool_kind=ToolKind.NON_IDEMPOTENT_MUTATION,
+        failure_phase=FailurePhase.AFTER_COMMIT,
+    )
+    original_key = "agent-regression-payment_charge"
+    first = session.invoke(original_key)
+    replay = session.invoke("different-logical-operation-key")
+
+    assert first.event.idempotency_key == original_key
+    assert replay.event.idempotency_key != original_key
+    assert session.logical_side_effects == 2
+    assert session.state_value != session.expected_final_state
+
+
+def test_llm_action_parser_preserves_boolean_intent_and_enforces_schema() -> None:
+    assert _parse_action('{"action":"retry","use_same_key":true}') == (
+        "retry",
+        True,
+    )
+    assert _parse_action('{"action":"invoke","use_same_key":false}') == (
+        "invoke",
+        False,
+    )
+    for raw in (
+        '{"action":"retry"}',
+        '{"action":"retry","use_same_key":1}',
+        '{"action":"retry","use_same_key":true,"extra":false}',
+        '{"action":"unknown","use_same_key":true}',
+        "[]",
+    ):
+        assert _parse_action(raw) == ("stop", False)
+
+
 def test_subprocess_adapter_reports_failures_and_accepts_text(tmp_path) -> None:
     script = tmp_path / "model.py"
-    script.write_text("import sys; print('{\"action\":\"stop\"}')")
+    script.write_text('import sys; print(\'{"action":"stop"}\')')
     adapter = SubprocessModelAdapter((sys.executable, str(script)))
     assert '"action":"stop"' in adapter("choose")
