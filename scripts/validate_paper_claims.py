@@ -171,6 +171,47 @@ def main() -> int:
             f"{label}: archived mean cost changed",
         )
 
+    before_commit = [
+        row for row in deterministic
+        if row["semantics"] == "non_idempotent_mutation"
+        and row["failure_phase"] == "before_commit"
+    ]
+    before_commit_outcomes = {
+        ("no_retry", "none"): (False, False, 0, 1.0),
+        ("blind_retry", "none"): (True, True, 0, 2.0),
+        ("status_before_retry", "none"): (True, True, 0, 4.0),
+        ("same_key_retry", "none"): (True, True, 0, 2.0),
+        ("rule_safety_wrapper", "none"): (True, True, 0, 4.0),
+        ("uncertainty_protocol", "machine_readable"): (True, True, 0, 4.0),
+        ("uncertainty_protocol", "natural_language"): (True, True, 0, 4.0),
+        ("uncertainty_protocol", "prompt_only"): (True, True, 0, 2.0),
+    }
+    for (controller, variant), expected in before_commit_outcomes.items():
+        rows = [
+            row for row in before_commit
+            if row["controller"] == controller
+            and row["protocol_variant"] == variant
+        ]
+        label = f"{controller}/{variant} before-commit"
+        require(len(rows) == 240, f"{label}: unexpected denominator")
+        completion, exact_state, duplicates, cost = expected
+        require(
+            all(row["successful_completion"] is completion for row in rows),
+            f"{label}: archived completion outcome changed",
+        )
+        require(
+            all(row["exact_final_state_correct"] is exact_state for row in rows),
+            f"{label}: archived exact-state outcome changed",
+        )
+        require(
+            all(row["duplicate_side_effects"] == duplicates for row in rows),
+            f"{label}: archived duplicate count changed",
+        )
+        require(
+            all(row["cost"] == cost for row in rows),
+            f"{label}: archived mean cost changed",
+        )
+
     require(all(row["successful_completion"] for row in model),
             "archived model rows are not all complete")
     require(all(row["exact_final_state_correct"] for row in model),
