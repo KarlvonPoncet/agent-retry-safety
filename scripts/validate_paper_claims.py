@@ -145,6 +145,14 @@ def main() -> int:
                 row["unsafe_retry"] == (row["duplicate_side_effects"] > 0),
                 f"{label} trial {row['trial_id']}: unsafe metric disagrees with duplicates",
             )
+            expected_cost = (
+                1 + row["retries"] + 2 * row["status_reads"]
+                + 4 * row["model_calls"]
+            )
+            require(
+                row["cost"] == expected_cost,
+                f"{label} trial {row['trial_id']}: cost disagrees with call counts",
+            )
     for row in deterministic:
         unprotected_after_commit_replay = (
             row["semantics"] == "non_idempotent_mutation"
