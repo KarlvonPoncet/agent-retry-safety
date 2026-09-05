@@ -306,6 +306,8 @@ def main() -> int:
                 f"model trial {trial_id}: malformed trace event")
         require(all(isinstance(event, dict) for event in oracle_trace),
                 f"model trial {trial_id}: malformed oracle trace event")
+        require(all(event.get("action") != "stop" for event in trace),
+                f"model trial {trial_id}: archived trace contains stop action")
         require(
             all(event.get("idempotency_key") != "same-logical-operation-key"
                 for event in (*trace, *oracle_trace)),
