@@ -327,6 +327,20 @@ def main() -> int:
             row for row in failure_rows
             if row["protocol_variant"] == variant
         ]
+        non_idempotent_rows = [
+            row for row in rows
+            if row["semantics"] == "non_idempotent_mutation"
+        ]
+        require(
+            isclose(
+                fsum(row["cost"] for row in non_idempotent_rows)
+                / len(non_idempotent_rows),
+                19 / 2,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ),
+            f"{variant} non-idempotent failure-row mean cost is no longer 9.5",
+        )
         require(
             isclose(
                 fsum(row["cost"] for row in rows) / len(rows),
