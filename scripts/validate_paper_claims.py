@@ -346,6 +346,24 @@ def main() -> int:
                 f"model trial {trial_id}: malformed trace event")
         require(all(isinstance(event, dict) for event in oracle_trace),
                 f"model trial {trial_id}: malformed oracle trace event")
+        first_oracle_event = oracle_trace[0].get("event")
+        if row["failure_phase"] == "none":
+            require(first_oracle_event == "success",
+                    f"model trial {trial_id}: no-failure row must begin with success")
+            require(row["model_calls"] == 0,
+                    f"model trial {trial_id}: no-failure row invoked the model")
+        else:
+            expected_initial_event = f"ambiguous_error_{row['failure_phase']}"
+            require(
+                first_oracle_event == expected_initial_event,
+                f"model trial {trial_id}: initial oracle event does not match phase",
+            )
+            require(row["model_calls"] > 0,
+                    f"model trial {trial_id}: failure row has no model decision")
+            require(
+                any(event.get("model_output") for event in trace[1:]),
+                f"model trial {trial_id}: no decision follows initial observation",
+            )
         require(all(event.get("action") != "stop" for event in trace),
                 f"model trial {trial_id}: archived trace contains stop action")
         require(
