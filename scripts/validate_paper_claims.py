@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,57 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+TASK_TOOLS = (
+    ("payment_charge", "charge_card"),
+    ("payment_debit", "debit_payment_method"),
+    ("email_send", "send_email"),
+    ("message_dispatch", "dispatch_notification"),
+    ("shipment_create", "create_shipment"),
+    ("parcel_book", "book_parcel"),
+    ("ticket_status", "set_ticket_status"),
+    ("case_state", "update_case_state"),
+    ("calendar_upsert", "upsert_event"),
+    ("meeting_upsert", "ensure_meeting"),
+    ("order_lookup", "lookup_order"),
+    ("purchase_read", "read_purchase_state"),
+)
+WORDINGS = ("timeout", "connection_lost", "service_unavailable", "held_out")
+PROTOCOL_VARIANTS = ("machine_readable", "natural_language", "prompt_only")
+DETERMINISTIC_CONTROLLERS = (
+    ("no_retry", "none"),
+    ("blind_retry", "none"),
+    ("status_before_retry", "none"),
+    ("same_key_retry", "none"),
+    ("rule_safety_wrapper", "none"),
+    *(("uncertainty_protocol", variant) for variant in PROTOCOL_VARIANTS),
+)
+
+
+def require_coverage(
+    rows: list[dict[str, Any]],
+    controller_variants: tuple[tuple[str, str], ...],
+    schedule: tuple[tuple[int, str], ...],
+    label: str,
+) -> None:
+    fields = (
+        "task_id",
+        "tool_name",
+        "error_wording",
+        "controller",
+        "protocol_variant",
+        "replicate",
+        "failure_phase",
+    )
+    actual = Counter(tuple(row[field] for field in fields) for row in rows)
+    expected = Counter(
+        (*task_tool, wording, *controller_variant, *schedule_entry)
+        for task_tool, wording, controller_variant, schedule_entry in product(
+            TASK_TOOLS, WORDINGS, controller_variants, schedule
+        )
+    )
+    require(actual == expected, f"{label} matrix has missing or duplicate coverage cells")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--deterministic", type=Path, required=True)
@@ -40,6 +92,19 @@ def main() -> int:
         "deterministic matrix must contain 11,520 rows",
     )
     require(len(model) == 432, "model matrix must contain 432 configured rows")
+    require_coverage(
+        deterministic,
+        DETERMINISTIC_CONTROLLERS,
+        tuple((replicate, ("before_commit", "after_commit", "none")[replicate % 3])
+              for replicate in range(30)),
+        "deterministic",
+    )
+    require_coverage(
+        model,
+        tuple(("llm", variant) for variant in PROTOCOL_VARIANTS),
+        ((0, "before_commit"), (1, "after_commit"), (2, "none")),
+        "model",
+    )
     phase_counts = Counter(row["failure_phase"] for row in model)
     require(
         phase_counts == Counter({

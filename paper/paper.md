@@ -48,7 +48,7 @@ ReAct [7] framed language-model interaction as an interleaving of reasoning and 
 
 AgentBench [9] evaluates language models as agents across environments, and WebArena [10] supplies a realistic web environment. SWE-bench [15] measures issue resolution in real repositories. Such benchmarks are important evidence about end-to-end agent capability, but their task success signals generally do not expose a paired, authoritative counterfactual in which the same error may correspond to either a committed or uncommitted request. Our oracle-bound row format is designed to complement, not replace, those environments.
 
-Two recent benchmarks are especially close in spirit. τ-bench evaluates tool-agent-user interaction in realistic domains [11], and ToolSandbox provides a stateful interactive tool-use benchmark [12]. We borrow the emphasis on state and tool traces while focusing narrowly on transport ambiguity, duplicate side effects, and reconciliation. The benchmark's error messages and held-out tool names test whether a controller's behavior depends on surface wording, while the deterministic oracle prevents a fluent but incorrect answer from being scored as success.
+Two recent benchmarks are especially close in spirit. τ-bench evaluates tool-agent-user interaction in realistic domains [11], and ToolSandbox provides a stateful interactive tool-use benchmark [12]. We borrow the emphasis on state and tool traces while focusing narrowly on transport ambiguity, duplicate side effects, and reconciliation. The benchmark's error messages and paraphrased tool names test whether a controller's behavior depends on surface wording, while the deterministic oracle prevents a fluent but incorrect answer from being scored as success.
 
 The literature review was conducted on 2026-08-25. DOI metadata for the three archival distributed-systems papers was checked through Crossref; title, author, year, and identifier fields for the preprints were checked through the arXiv API and abstract pages; and the operational claims about idempotency and workflow execution were checked against the linked AWS, Stripe, and Temporal first-party pages. The machine-readable verification record is `paper/references.json`. No DOI, venue, page range, or model result is inferred from an unverified secondary citation.
 
@@ -78,26 +78,26 @@ The threat is an accidental duplicate external effect caused by a controller tha
 
 ## 4. Benchmark design
 
-### 4.1 Tasks, tools, and held-out surface forms
+### 4.1 Tasks, tools, and paraphrased surface forms
 
 The benchmark uses six semantic task families:
 
-| Family | Tool surface | Oracle semantics | Held out? |
+| Family | Tool surface | Oracle semantics | Surface form |
 |---|---|---|---|
-| payment | `charge_card` | non-idempotent mutation | no |
-| payment | `debit_payment_method` | non-idempotent mutation | yes |
-| messaging | `send_email` | non-idempotent mutation | no |
-| messaging | `dispatch_notification` | non-idempotent mutation | yes |
-| fulfillment | `create_shipment` | non-idempotent mutation | no |
-| fulfillment | `book_parcel` | non-idempotent mutation | yes |
-| support | `set_ticket_status` | idempotent mutation | no |
-| support | `update_case_state` | idempotent mutation | yes |
-| calendar | `upsert_event` | idempotent mutation | no |
-| calendar | `ensure_meeting` | idempotent mutation | yes |
-| lookup | `lookup_order` | read-only | no |
-| lookup | `read_purchase_state` | read-only | yes |
+| payment | `charge_card` | non-idempotent mutation | base |
+| payment | `debit_payment_method` | non-idempotent mutation | paraphrased |
+| messaging | `send_email` | non-idempotent mutation | base |
+| messaging | `dispatch_notification` | non-idempotent mutation | paraphrased |
+| fulfillment | `create_shipment` | non-idempotent mutation | base |
+| fulfillment | `book_parcel` | non-idempotent mutation | paraphrased |
+| support | `set_ticket_status` | idempotent mutation | base |
+| support | `update_case_state` | idempotent mutation | paraphrased |
+| calendar | `upsert_event` | idempotent mutation | base |
+| calendar | `ensure_meeting` | idempotent mutation | paraphrased |
+| lookup | `lookup_order` | read-only | base |
+| lookup | `read_purchase_state` | read-only | paraphrased |
 
-The names and natural-language descriptions vary independently of the oracle semantics. Each family has one base tool and one paraphrased surface form. The six paraphrased tool names are not special-cased by deterministic policies; because no model is trained on this suite, “base/paraphrased” is a surface-form factor rather than a machine-learning train/held-out split. The operation families are intentionally ordinary examples where accidental duplication has different practical consequences; the simulator does not contact a payment, mail, shipping, calendar, or support provider.
+The names and natural-language descriptions vary independently of the oracle semantics. Each family has one base tool and one paraphrased surface form. The six paraphrased tool names are not special-cased by deterministic policies; because no model is fit on this suite, “base/paraphrased” is a surface-form factor rather than a dataset partition. The operation families are intentionally ordinary examples where accidental duplication has different practical consequences; the simulator does not contact a payment, mail, shipping, calendar, or support provider.
 
 ### 4.2 Failure schedules and wording
 
@@ -110,7 +110,7 @@ The four controller-visible wordings are:
 3. “Service unavailable; the request may have completed.”
 4. “No confirmation arrived. Check whether the change took effect before repeating.”
 
-The fourth is a held-out wording. No wording is allowed to reveal the oracle's commit bit. For deterministic policies, wording is a stratification factor and a null sensitivity control. For the model run, wording is inserted into the prompt and retained verbatim in the raw trace.
+The fourth is a paraphrased wording. No wording is allowed to reveal the oracle's commit bit. For deterministic policies, wording is a stratification factor and a null sensitivity control. For the model run, wording is inserted into the prompt and retained verbatim in the raw trace.
 
 ### 4.3 Controllers and the explicit protocol
 
@@ -156,7 +156,7 @@ The analysis script groups raw rows by controller, protocol variant, family, sem
 
 ### 6.1 Deterministic controller results
 
-The primary safety result is stratified to the condition where duplicate effects are possible: non-idempotent tasks after commit. Each deterministic cell has 240 paired rows (six matched train/held-out tools, four wordings, ten schedule replicates).
+The primary safety result is stratified to the condition where duplicate effects are possible: non-idempotent tasks after commit. Each deterministic cell has 240 paired rows (six matched base/paraphrased tools, four wordings, ten schedule replicates).
 
 | Controller | Protocol variant | Unsafe retries | Completion | Exact state | Mean cost |
 |---|---:|---:|---:|---:|---:|
@@ -177,13 +177,13 @@ For before-commit ambiguity, blind retry, same-key retry, status, the rule wrapp
 
 ### 6.2 Semantics, surface forms, and failure phase
 
-Across the full 11,520-row matrix, duplicate effects occurred only when the operation semantics were non-idempotent and the controller replayed without a same key or reconciliation. Read-only and idempotent tasks therefore provide negative controls: they show that a safe final state does not establish that a controller understood the uncertainty, and that repeated calls can still incur cost. Every task family and semantics cell has matched train and held-out surface forms. Held-out tool names did not change deterministic policy behavior, as expected.
+Across the full 11,520-row matrix, duplicate effects occurred only when the operation semantics were non-idempotent and the controller replayed without a same key or reconciliation. Read-only and idempotent tasks therefore provide negative controls: they show that a safe final state does not establish that a controller understood the uncertainty, and that repeated calls can still incur cost. Every task family and semantics cell has matched base and paraphrased surface forms. Paraphrased tool names did not change deterministic policy behavior, as expected.
 
 The deterministic wording strata are identical because deterministic policies consume the error as a boolean ambiguous signal. That null result is useful: any wording sensitivity in a model run cannot be attributed to a change in the oracle schedule. It does not establish wording invariance for agents.
 
 ### 6.3 Authenticated single-model matrix
 
-The one available model facility was evaluated with all twelve matched tools, all four wordings, three protocol variants, and one schedule entry per phase. On non-idempotent after-commit rows, every variant completed 24/24 with exact final state and 0/24 unsafe retries. Across variants, each wording stratum completed 18/18 with no unsafe retry, and train and held-out non-idempotent surfaces each completed 36/36 with no unsafe retry. Before commit, every variant completed 24/24 with exact state and no duplicates. It is important not to overinterpret this: the adapter enforced a strict action schema, and the run used one authenticated facility without a second model or independent random schedules.
+The one available model facility was evaluated with all twelve matched tools, all four wordings, three protocol variants, and one schedule entry per phase. On non-idempotent after-commit rows, every variant completed 24/24 with exact final state and 0/24 unsafe retries. Across variants, each wording stratum completed 18/18 with no unsafe retry, and base and paraphrased non-idempotent surfaces each completed 36/36 with no unsafe retry. Before commit, every variant completed 24/24 with exact state and no duplicates. It is important not to overinterpret this: the adapter enforced a strict action schema, and the run used one authenticated facility without a second model or independent random schedules.
 
 The model used a mean cost of 9.5 on non-idempotent failure rows under the lab proxy, compared with 2.0 for same-key retry and 3.5 across the corresponding status/protocol failure rows. After the benchmark's initial operation produced an ambiguous observation, the model reconciled once in every non-idempotent failure row; it retried once before commit and stopped after reconciliation confirmed an after-commit effect. In those non-idempotent failure cells, machine-readable, natural-language, and prompt-only variants therefore had identical safety, completion, and cost. Across all semantics, their failure-row mean costs were 9.08, 8.54, and 8.77 respectively, so the null result is not a claim of identical overall behavior. The corrected traces contain 154 same-key operation replays using the byte-identical original key (132 before-commit and 22 after-commit), and no `same-logical-operation-key` placeholder. However, the model did not choose a same-key replay in any non-idempotent after-commit row; those 72 safe outcomes were established by reconciliation. Thus the run demonstrates correct execution of selected same-key intent in identifiable rows, but does not demonstrate same-key safety for that unexercised condition. No private reasoning was recorded.
 
