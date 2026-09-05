@@ -30,18 +30,18 @@ def require(condition: bool, message: str) -> None:
 
 
 TASK_TOOLS = (
-    ("payment_charge", "charge_card"),
-    ("payment_debit", "debit_payment_method"),
-    ("email_send", "send_email"),
-    ("message_dispatch", "dispatch_notification"),
-    ("shipment_create", "create_shipment"),
-    ("parcel_book", "book_parcel"),
-    ("ticket_status", "set_ticket_status"),
-    ("case_state", "update_case_state"),
-    ("calendar_upsert", "upsert_event"),
-    ("meeting_upsert", "ensure_meeting"),
-    ("order_lookup", "lookup_order"),
-    ("purchase_read", "read_purchase_state"),
+    ("payment_charge", "charge_card", False),
+    ("payment_debit", "debit_payment_method", True),
+    ("email_send", "send_email", False),
+    ("message_dispatch", "dispatch_notification", True),
+    ("shipment_create", "create_shipment", False),
+    ("parcel_book", "book_parcel", True),
+    ("ticket_status", "set_ticket_status", False),
+    ("case_state", "update_case_state", True),
+    ("calendar_upsert", "upsert_event", False),
+    ("meeting_upsert", "ensure_meeting", True),
+    ("order_lookup", "lookup_order", False),
+    ("purchase_read", "read_purchase_state", True),
 )
 WORDINGS = ("timeout", "connection_lost", "service_unavailable", "held_out")
 PROTOCOL_VARIANTS = ("machine_readable", "natural_language", "prompt_only")
@@ -64,6 +64,7 @@ def require_coverage(
     fields = (
         "task_id",
         "tool_name",
+        "held_out_tool",
         "error_wording",
         "controller",
         "protocol_variant",
