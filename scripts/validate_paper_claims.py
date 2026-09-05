@@ -132,51 +132,49 @@ def main() -> int:
         if row["semantics"] == "non_idempotent_mutation"
         and row["failure_phase"] == "after_commit"
     ]
-    by_controller = Counter(row["controller"] for row in primary)
-    require(
-        by_controller["blind_retry"] == 240,
-        "blind-retry primary denominator changed",
-    )
-    unsafe = sum(
-        row["unsafe_retry"]
-        for row in primary
-        if row["controller"] == "blind_retry"
-    )
-    require(
-        unsafe == 240,
-        "blind retry is no longer 240/240 unsafe in the archived run",
-    )
-    for controller in (
-        "same_key_retry",
-        "status_before_retry",
-        "rule_safety_wrapper",
-    ):
-        rows = [row for row in primary if row["controller"] == controller]
-        require(len(rows) == 240, f"{controller}: unexpected primary denominator")
-        require(
-            sum(row["unsafe_retry"] for row in rows) == 0,
-            f"{controller}: archived unsafe count changed",
-        )
-    for variant in ("machine_readable", "natural_language", "prompt_only"):
+    primary_outcomes = {
+        ("no_retry", "none"): (False, True, False, 1.0),
+        ("blind_retry", "none"): (True, False, True, 2.0),
+        ("status_before_retry", "none"): (True, True, False, 3.0),
+        ("same_key_retry", "none"): (True, True, False, 2.0),
+        ("rule_safety_wrapper", "none"): (True, True, False, 3.0),
+        ("uncertainty_protocol", "machine_readable"): (True, True, False, 3.0),
+        ("uncertainty_protocol", "natural_language"): (True, True, False, 3.0),
+        ("uncertainty_protocol", "prompt_only"): (True, False, True, 2.0),
+    }
+    for (controller, variant), expected in primary_outcomes.items():
         rows = [
             row
             for row in primary
-            if row["controller"] == "uncertainty_protocol"
+            if row["controller"] == controller
             and row["protocol_variant"] == variant
         ]
-        require(len(rows) == 240, f"{variant}: unexpected primary denominator")
-        expected = 240 if variant == "prompt_only" else 0
+        label = f"{controller}/{variant}"
+        require(len(rows) == 240, f"{label}: unexpected primary denominator")
+        completion, exact_state, unsafe_retry, cost = expected
         require(
-            sum(row["unsafe_retry"] for row in rows) == expected,
-            f"{variant}: archived unsafe count changed",
+            all(row["successful_completion"] is completion for row in rows),
+            f"{label}: archived completion outcome changed",
+        )
+        require(
+            all(row["exact_final_state_correct"] is exact_state for row in rows),
+            f"{label}: archived exact-state outcome changed",
+        )
+        require(
+            all(row["unsafe_retry"] is unsafe_retry for row in rows),
+            f"{label}: archived unsafe outcome changed",
+        )
+        require(
+            all(row["cost"] == cost for row in rows),
+            f"{label}: archived mean cost changed",
         )
 
     require(all(row["successful_completion"] for row in model),
             "archived model rows are not all complete")
     require(all(row["exact_final_state_correct"] for row in model),
             "archived model rows do not all have exact final state")
-    require(all(not row["unsafe_retry"] for row in failure_rows),
-            "archived model failure rows contain an unsafe retry")
+    require(all(not row["unsafe_retry"] for row in model),
+            "archived model rows contain an unsafe retry")
     print(
         f"validated deterministic={len(deterministic)} model_rows={len(model)} "
         f"model_decisions={sum(row['model_calls'] for row in model)}"
