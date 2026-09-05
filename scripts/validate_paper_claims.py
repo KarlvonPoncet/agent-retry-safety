@@ -453,10 +453,17 @@ def main() -> int:
                 ) from exc
             require(isinstance(decision, dict),
                     f"model trial {trial_id}: raw model output is not an object")
+            require(set(decision) == {"action", "use_same_key"},
+                    f"model trial {trial_id}: raw model output has invalid fields")
+            require(
+                isinstance(decision["action"], str)
+                and decision["action"] in {"invoke", "retry", "reconcile", "stop"},
+                f"model trial {trial_id}: raw model output has invalid action",
+            )
+            require(type(decision["use_same_key"]) is bool,
+                    f"model trial {trial_id}: invalid same-key intent")
             require(decision.get("action") == event.get("action"),
                     f"model trial {trial_id}: raw action disagrees with trace")
-            require(isinstance(decision.get("use_same_key"), bool),
-                    f"model trial {trial_id}: invalid same-key intent")
             if decision["action"] in ("invoke", "retry"):
                 expected_key = initial_key if decision["use_same_key"] else None
                 require(event.get("idempotency_key") == expected_key,
