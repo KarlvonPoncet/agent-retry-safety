@@ -211,7 +211,7 @@ The tests cover before- and after-commit behavior, duplicate detection, all four
 
 ## Agent benchmark and paper
 
-The agent-facing extension is `retry_safety.agent_benchmark`. It keeps the existing `DeterministicToolSession` as the oracle and adds realistic payment, messaging, fulfillment, support, calendar, and lookup task families; matched train/held-out tool surface forms for every family and operation semantics; four error wordings; paired failure schedules; deterministic baselines; a rule safety wrapper; and a machine-readable commit-uncertainty/reconciliation protocol. The controller-visible adapter never returns the simulator's `committed` field. Raw final model actions and oracle traces are retained in JSON artifacts; private model reasoning is not recorded.
+The agent-facing extension is `retry_safety.agent_benchmark`. It keeps the existing `DeterministicToolSession` as the oracle and adds realistic payment, messaging, fulfillment, support, calendar, and lookup task families; matched base/paraphrased tool surface forms for every family and operation semantics; four error wordings; paired failure schedules; deterministic baselines; a rule safety wrapper; and a machine-readable commit-uncertainty/reconciliation protocol. The controller-visible adapter never returns the simulator's `committed` field. Raw final model actions and oracle traces are retained in JSON artifacts; private model reasoning is not recorded.
 
 Run the full credential-free deterministic agent matrix and regenerate its table and SVG figure:
 
@@ -245,7 +245,12 @@ The research paper is maintained as Markdown and builds to local HTML without ex
 
 ```sh
 make -C paper
+.venv/bin/python scripts/validate_paper_claims.py \
+  --deterministic paper/artifacts/agent_benchmark.json \
+  --model paper/artifacts/llm_matrix.json
 ```
+
+The validation command checks headline denominators and results against the archived JSON; it performs no model calls.
 
 `paper/paper.md` contains the abstract, research questions and hypotheses, formal model, related work, benchmark, methods, results, error analysis, mitigation ablations, validity threats, ethics, limitations, conclusion, references, and reproducibility statement. `paper/references.json` records verification URLs and dates for every cited source. `paper/artifacts/` contains the raw manifests/traces and regenerated analysis outputs used by the paper.
 

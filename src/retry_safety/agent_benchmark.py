@@ -252,7 +252,7 @@ _ERROR_MESSAGES: dict[ErrorWording, str] = {
 
 
 def default_task_specs() -> tuple[TaskSpec, ...]:
-    """Return train/held-out paraphrased tools over six common task families."""
+    """Return matched base/paraphrased tools over six common task families."""
 
     training = (
         TaskSpec(
