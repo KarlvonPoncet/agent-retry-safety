@@ -107,6 +107,12 @@ def main() -> int:
         ((0, "before_commit"), (1, "after_commit"), (2, "none")),
         "model",
     )
+    for label, rows in (("deterministic", deterministic), ("model", model)):
+        for row in rows:
+            require(
+                row["unsafe_retry"] == (row["duplicate_side_effects"] > 0),
+                f"{label} trial {row['trial_id']}: unsafe metric disagrees with duplicates",
+            )
     for row in deterministic:
         unprotected_after_commit_replay = (
             row["semantics"] == "non_idempotent_mutation"
@@ -256,6 +262,8 @@ def main() -> int:
             "archived model rows are not all complete")
     require(all(row["exact_final_state_correct"] for row in model),
             "archived model rows do not all have exact final state")
+    require(all(row["duplicate_side_effects"] == 0 for row in model),
+            "archived model rows contain duplicate side effects")
     require(all(not row["unsafe_retry"] for row in model),
             "archived model rows contain an unsafe retry")
     non_idempotent_failures = [
