@@ -171,8 +171,10 @@ def main() -> int:
             f"{variant}: archived unsafe count changed",
         )
 
-    require(all(row["successful_completion"] for row in failure_rows),
-            "archived model failure rows are not all complete")
+    require(all(row["successful_completion"] for row in model),
+            "archived model rows are not all complete")
+    require(all(row["exact_final_state_correct"] for row in model),
+            "archived model rows do not all have exact final state")
     require(all(not row["unsafe_retry"] for row in failure_rows),
             "archived model failure rows contain an unsafe retry")
     print(
