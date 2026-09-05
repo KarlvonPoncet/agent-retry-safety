@@ -29,19 +29,49 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-TASK_TOOLS = (
-    ("payment_charge", "charge_card", False),
-    ("payment_debit", "debit_payment_method", True),
-    ("email_send", "send_email", False),
-    ("message_dispatch", "dispatch_notification", True),
-    ("shipment_create", "create_shipment", False),
-    ("parcel_book", "book_parcel", True),
-    ("ticket_status", "set_ticket_status", False),
-    ("case_state", "update_case_state", True),
-    ("calendar_upsert", "upsert_event", False),
-    ("meeting_upsert", "ensure_meeting", True),
-    ("order_lookup", "lookup_order", False),
-    ("purchase_read", "read_purchase_state", True),
+TASK_CELLS = (
+    (
+        "payment_charge", "payment", "charge_card",
+        "non_idempotent_mutation", False,
+    ),
+    (
+        "payment_debit", "payment", "debit_payment_method",
+        "non_idempotent_mutation", True,
+    ),
+    (
+        "email_send", "messaging", "send_email",
+        "non_idempotent_mutation", False,
+    ),
+    (
+        "message_dispatch", "messaging", "dispatch_notification",
+        "non_idempotent_mutation", True,
+    ),
+    (
+        "shipment_create", "fulfillment", "create_shipment",
+        "non_idempotent_mutation", False,
+    ),
+    (
+        "parcel_book", "fulfillment", "book_parcel",
+        "non_idempotent_mutation", True,
+    ),
+    (
+        "ticket_status", "support", "set_ticket_status",
+        "idempotent_mutation", False,
+    ),
+    (
+        "case_state", "support", "update_case_state",
+        "idempotent_mutation", True,
+    ),
+    (
+        "calendar_upsert", "calendar", "upsert_event",
+        "idempotent_mutation", False,
+    ),
+    (
+        "meeting_upsert", "calendar", "ensure_meeting",
+        "idempotent_mutation", True,
+    ),
+    ("order_lookup", "lookup", "lookup_order", "read_only", False),
+    ("purchase_read", "lookup", "read_purchase_state", "read_only", True),
 )
 WORDINGS = ("timeout", "connection_lost", "service_unavailable", "held_out")
 PROTOCOL_VARIANTS = ("machine_readable", "natural_language", "prompt_only")
@@ -63,7 +93,9 @@ def require_coverage(
 ) -> None:
     fields = (
         "task_id",
+        "task_family",
         "tool_name",
+        "semantics",
         "held_out_tool",
         "error_wording",
         "controller",
@@ -75,7 +107,7 @@ def require_coverage(
     expected = Counter(
         (*task_tool, wording, *controller_variant, *schedule_entry)
         for task_tool, wording, controller_variant, schedule_entry in product(
-            TASK_TOOLS, WORDINGS, controller_variants, schedule
+            TASK_CELLS, WORDINGS, controller_variants, schedule
         )
     )
     require(actual == expected, f"{label} matrix has missing or duplicate coverage cells")
