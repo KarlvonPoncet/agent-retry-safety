@@ -11,6 +11,7 @@ import argparse
 import json
 from collections import Counter
 from itertools import product
+from math import fsum, isclose
 from pathlib import Path
 from typing import Any
 
@@ -175,6 +176,39 @@ def main() -> int:
             "archived model rows do not all have exact final state")
     require(all(not row["unsafe_retry"] for row in model),
             "archived model rows contain an unsafe retry")
+    non_idempotent_failures = [
+        row for row in failure_rows
+        if row["semantics"] == "non_idempotent_mutation"
+    ]
+    require(
+        isclose(
+            fsum(row["cost"] for row in non_idempotent_failures)
+            / len(non_idempotent_failures),
+            19 / 2,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ),
+        "model non-idempotent failure-row mean cost is no longer 9.5",
+    )
+    variant_costs = {
+        "machine_readable": (109 / 12, "9.08"),
+        "natural_language": (205 / 24, "8.54"),
+        "prompt_only": (421 / 48, "8.77"),
+    }
+    for variant, (expected, reported) in variant_costs.items():
+        rows = [
+            row for row in failure_rows
+            if row["protocol_variant"] == variant
+        ]
+        require(
+            isclose(
+                fsum(row["cost"] for row in rows) / len(rows),
+                expected,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            ),
+            f"{variant} failure-row mean cost is no longer {reported}",
+        )
     print(
         f"validated deterministic={len(deterministic)} model_rows={len(model)} "
         f"model_decisions={sum(row['model_calls'] for row in model)}"
