@@ -209,6 +209,77 @@ def main() -> int:
             ),
             f"{variant} failure-row mean cost is no longer {reported}",
         )
+
+    replay_phases: Counter[str] = Counter()
+    non_idempotent_replay_phases: Counter[str] = Counter()
+    for row in model:
+        trial_id = row.get("trial_id", "unknown")
+        trace = row.get("trace")
+        oracle_trace = row.get("oracle_trace")
+        require(isinstance(trace, list) and trace,
+                f"model trial {trial_id}: missing trace events")
+        require(isinstance(oracle_trace, list) and oracle_trace,
+                f"model trial {trial_id}: missing oracle trace events")
+        require(all(isinstance(event, dict) for event in trace),
+                f"model trial {trial_id}: malformed trace event")
+        require(all(isinstance(event, dict) for event in oracle_trace),
+                f"model trial {trial_id}: malformed oracle trace event")
+        require(
+            all(event.get("idempotency_key") != "same-logical-operation-key"
+                for event in (*trace, *oracle_trace)),
+            f"model trial {trial_id}: placeholder operation key remains",
+        )
+        require(trace[0].get("action") == "invoke",
+                f"model trial {trial_id}: trace must begin with invoke")
+        initial_key = trace[0].get("idempotency_key")
+        require(isinstance(initial_key, str) and initial_key,
+                f"model trial {trial_id}: missing original operation key")
+        require(oracle_trace[0].get("idempotency_key") == initial_key,
+                f"model trial {trial_id}: trace and oracle keys differ")
+
+        replays = [
+            event for event in trace[1:]
+            if event.get("action") in ("invoke", "retry")
+        ]
+        require(row.get("retries") == len(replays),
+                f"model trial {trial_id}: retry count disagrees with trace")
+        require(all(event.get("idempotency_key") == initial_key
+                    for event in replays),
+                f"model trial {trial_id}: replay did not use original key")
+        oracle_replays = [
+            event for event in oracle_trace
+            if event.get("attempt", 0) > 1
+        ]
+        require(len(oracle_replays) == len(replays),
+                f"model trial {trial_id}: replay trace disagrees with oracle")
+        require(all(event.get("idempotency_key") == initial_key
+                    for event in oracle_replays),
+                f"model trial {trial_id}: oracle replay used a different key")
+        if replays:
+            replay_phases[row["failure_phase"]] += len(replays)
+            if row["semantics"] == "non_idempotent_mutation":
+                non_idempotent_replay_phases[row["failure_phase"]] += len(replays)
+
+        if (row["semantics"] == "non_idempotent_mutation"
+                and row["failure_phase"] != "none"):
+            require(
+                sum(event.get("action") == "reconcile" for event in trace) == 1,
+                f"model trial {trial_id}: expected one reconciliation",
+            )
+            require(
+                sum(event.get("event") == "status_read"
+                    for event in oracle_trace) == 1,
+                f"model trial {trial_id}: reconciliation missing from oracle",
+            )
+
+    require(replay_phases == Counter({"before_commit": 132, "after_commit": 22}),
+            "model replay phase counts are no longer 132/22")
+    require(sum(replay_phases.values()) == 154,
+            "model same-key replay count is no longer 154")
+    require(
+        non_idempotent_replay_phases == Counter({"before_commit": 72}),
+        "non-idempotent replay phase counts are no longer 72/0",
+    )
     print(
         f"validated deterministic={len(deterministic)} model_rows={len(model)} "
         f"model_decisions={sum(row['model_calls'] for row in model)}"
