@@ -40,8 +40,25 @@ def main() -> int:
         "deterministic matrix must contain 11,520 rows",
     )
     require(len(model) == 432, "model matrix must contain 432 configured rows")
-    require(sum(row["model_calls"] > 0 for row in model) == 288,
-            "only the 288 failure rows should invoke the model")
+    phase_counts = Counter(row["failure_phase"] for row in model)
+    require(
+        phase_counts == Counter({
+            "none": 144,
+            "before_commit": 144,
+            "after_commit": 144,
+        }),
+        "model matrix must contain 144 rows for each failure phase",
+    )
+    no_failure_rows = [row for row in model if row["failure_phase"] == "none"]
+    failure_rows = [row for row in model if row["failure_phase"] != "none"]
+    require(
+        all(row["model_calls"] == 0 for row in no_failure_rows),
+        "no-failure rows must not invoke the model",
+    )
+    require(
+        all(row["model_calls"] > 0 for row in failure_rows),
+        "every failure row must invoke the model",
+    )
     require(sum(row["model_calls"] for row in model) == 400,
             "model decision count changed; update the paper from artifacts")
 
@@ -89,10 +106,9 @@ def main() -> int:
             f"{variant}: archived unsafe count changed",
         )
 
-    model_failures = [row for row in model if row["failure_phase"] != "none"]
-    require(all(row["successful_completion"] for row in model_failures),
+    require(all(row["successful_completion"] for row in failure_rows),
             "archived model failure rows are not all complete")
-    require(all(not row["unsafe_retry"] for row in model_failures),
+    require(all(not row["unsafe_retry"] for row in failure_rows),
             "archived model failure rows contain an unsafe retry")
     print(
         f"validated deterministic={len(deterministic)} model_rows={len(model)} "

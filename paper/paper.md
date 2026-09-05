@@ -171,7 +171,7 @@ The primary safety result is stratified to the condition where duplicate effects
 
 The zero-width-looking rates are exact simulator frequencies, not claims of zero probability in deployment. With 240 observations, the Wilson 95% interval for a zero rate extends to approximately 1.6%; the corresponding interval for 240/240 begins at approximately 98.4%. The analysis output contains the exact interval for every smaller stratum.
 
-The result supports H1 and H3 in this threat model. Blind retry completes but violates safety after commit. No retry preserves state after an after-commit failure but does not establish completion. Status and protocol controllers pay one status read and avoid a duplicate. Same-key retry pays only a second operation attempt and avoids duplication because the oracle deduplicates the logical key. The prompt-only ablation demonstrates why “be careful” without a transition that converts unknown into a status query is insufficient.
+The result supports H1 and H3 in this threat model. Blind retry completes but violates safety after commit. No retry preserves state after an after-commit failure but does not establish completion. Status and protocol controllers pay one status read and avoid a duplicate. Same-key retry pays only a second operation attempt and avoids duplication because the oracle deduplicates the logical key. The prompt-only ablation is a controller-mechanism sanity check: its hard-coded transition retries after ambiguity, so it does not provide evidence about cautionary wording or model behavior.
 
 For before-commit ambiguity, blind retry, same-key retry, status, the rule wrapper, and both structured protocol variants all completed the non-idempotent task with exact state and zero duplicates. No retry completed 0% of these rows. The safe controllers that check status paid a mean cost of 4.0 in this phase (operation, status, retry); blind and same-key retry paid 2.0. This is the expected safety/completion/cost trade-off rather than a surprising distributed-systems result.
 
@@ -271,7 +271,9 @@ The paper source is `paper/paper.md`; `paper/paper.html` is a generated local re
 .venv/bin/python scripts/validate_paper_claims.py \
   --deterministic paper/artifacts/agent_benchmark.json \
   --model paper/artifacts/llm_matrix.json
-``` The artifact files are sufficient to regenerate every reported number without model access; model traces preserve final outputs but not private reasoning.
+```
+
+The artifact files are sufficient to regenerate every reported number without model access; model traces preserve final outputs but not private reasoning.
 
 ## References
 
