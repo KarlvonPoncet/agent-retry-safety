@@ -429,8 +429,6 @@ def main() -> int:
                 any(event.get("model_output") for event in trace[1:]),
                 f"model trial {trial_id}: no decision follows initial observation",
             )
-        require(all(event.get("action") != "stop" for event in trace),
-                f"model trial {trial_id}: archived trace contains stop action")
         require(
             all(event.get("idempotency_key") != "same-logical-operation-key"
                 for event in (*trace, *oracle_trace)),
@@ -443,6 +441,31 @@ def main() -> int:
                 f"model trial {trial_id}: missing original operation key")
         require(oracle_trace[0].get("idempotency_key") == initial_key,
                 f"model trial {trial_id}: trace and oracle keys differ")
+        for event in trace[1:]:
+            raw_output = event["model_output"]
+            if not raw_output:
+                continue
+            try:
+                decision = json.loads(raw_output)
+            except (json.JSONDecodeError, TypeError) as exc:
+                raise AssertionError(
+                    f"model trial {trial_id}: invalid raw model output"
+                ) from exc
+            require(isinstance(decision, dict),
+                    f"model trial {trial_id}: raw model output is not an object")
+            require(decision.get("action") == event.get("action"),
+                    f"model trial {trial_id}: raw action disagrees with trace")
+            require(isinstance(decision.get("use_same_key"), bool),
+                    f"model trial {trial_id}: invalid same-key intent")
+            if decision["action"] in ("invoke", "retry"):
+                expected_key = initial_key if decision["use_same_key"] else None
+                require(event.get("idempotency_key") == expected_key,
+                        f"model trial {trial_id}: same-key intent disagrees with trace")
+            else:
+                require(event.get("idempotency_key") is None,
+                        f"model trial {trial_id}: non-operation action carries a key")
+        require(all(event.get("action") != "stop" for event in trace),
+                f"model trial {trial_id}: archived trace contains stop action")
 
         replays = [
             event for event in trace[1:]
