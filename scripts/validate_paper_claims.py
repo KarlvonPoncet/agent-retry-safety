@@ -262,6 +262,34 @@ def main() -> int:
 
         if (row["semantics"] == "non_idempotent_mutation"
                 and row["failure_phase"] != "none"):
+            visible_actions = tuple(
+                "retry_same_key"
+                if index > 0 and event.get("action") in ("invoke", "retry")
+                else event.get("action")
+                for index, event in enumerate(trace)
+            )
+            oracle_events = tuple(event.get("event") for event in oracle_trace)
+            if row["failure_phase"] == "before_commit":
+                expected_visible = ("invoke", "reconcile", "retry_same_key")
+                expected_oracle = (
+                    "ambiguous_error_before_commit",
+                    "status_read",
+                    "success",
+                )
+            else:
+                expected_visible = ("invoke", "reconcile")
+                expected_oracle = (
+                    "ambiguous_error_after_commit",
+                    "status_read",
+                )
+            require(
+                visible_actions == expected_visible,
+                f"model trial {trial_id}: unexpected ordered visible actions",
+            )
+            require(
+                oracle_events == expected_oracle,
+                f"model trial {trial_id}: unexpected ordered oracle events",
+            )
             require(
                 sum(event.get("action") == "reconcile" for event in trace) == 1,
                 f"model trial {trial_id}: expected one reconciliation",
