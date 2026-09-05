@@ -107,6 +107,46 @@ def main() -> int:
         ((0, "before_commit"), (1, "after_commit"), (2, "none")),
         "model",
     )
+    for row in deterministic:
+        unprotected_after_commit_replay = (
+            row["semantics"] == "non_idempotent_mutation"
+            and row["failure_phase"] == "after_commit"
+            and (
+                row["controller"] == "blind_retry"
+                or (
+                    row["controller"] == "uncertainty_protocol"
+                    and row["protocol_variant"] == "prompt_only"
+                )
+            )
+        )
+        expected_duplicates = 1 if unprotected_after_commit_replay else 0
+        require(
+            row["duplicate_side_effects"] == expected_duplicates,
+            f"deterministic trial {row['trial_id']}: unexpected duplicate effects",
+        )
+
+    equivalence_groups: dict[tuple[Any, ...], set[tuple[Any, ...]]] = {}
+    for row in deterministic:
+        group = (
+            row["task_family"],
+            row["semantics"],
+            row["controller"],
+            row["protocol_variant"],
+            row["replicate"],
+            row["failure_phase"],
+        )
+        outcome = (
+            row["duplicate_side_effects"],
+            row["successful_completion"],
+            row["exact_final_state_correct"],
+            row["unsafe_retry"],
+            row["cost"],
+        )
+        equivalence_groups.setdefault(group, set()).add(outcome)
+    require(
+        all(len(outcomes) == 1 for outcomes in equivalence_groups.values()),
+        "deterministic wording or surface-form outcomes diverged",
+    )
     phase_counts = Counter(row["failure_phase"] for row in model)
     require(
         phase_counts == Counter({
