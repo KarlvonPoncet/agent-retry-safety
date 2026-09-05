@@ -204,9 +204,6 @@ def main() -> int:
         all(row["model_calls"] > 0 for row in failure_rows),
         "every failure row must invoke the model",
     )
-    require(sum(row["model_calls"] for row in model) == 400,
-            "model decision count changed; update the paper from artifacts")
-
     primary = [
         row for row in deterministic
         if row["semantics"] == "non_idempotent_mutation"
@@ -334,6 +331,7 @@ def main() -> int:
 
     replay_phases: Counter[str] = Counter()
     non_idempotent_replay_phases: Counter[str] = Counter()
+    traced_model_calls = 0
     for row in model:
         trial_id = row.get("trial_id", "unknown")
         trace = row.get("trace")
@@ -346,6 +344,14 @@ def main() -> int:
                 f"model trial {trial_id}: malformed trace event")
         require(all(isinstance(event, dict) for event in oracle_trace),
                 f"model trial {trial_id}: malformed oracle trace event")
+        require(all(isinstance(event.get("model_output"), str) for event in trace),
+                f"model trial {trial_id}: malformed model output")
+        require(trace[0]["model_output"] == "",
+                f"model trial {trial_id}: initial event has model output")
+        row_model_calls = sum(bool(event["model_output"]) for event in trace)
+        require(row["model_calls"] == row_model_calls,
+                f"model trial {trial_id}: model call count disagrees with trace")
+        traced_model_calls += row_model_calls
         first_oracle_event = oracle_trace[0].get("event")
         if row["failure_phase"] == "none":
             require(first_oracle_event == "success",
@@ -450,9 +456,11 @@ def main() -> int:
         non_idempotent_replay_phases == Counter({"before_commit": 72}),
         "non-idempotent replay phase counts are no longer 72/0",
     )
+    require(traced_model_calls == 400,
+            "model decision count changed; update the paper from traces")
     print(
         f"validated deterministic={len(deterministic)} model_rows={len(model)} "
-        f"model_decisions={sum(row['model_calls'] for row in model)}"
+        f"model_decisions={traced_model_calls}"
     )
     return 0
 
