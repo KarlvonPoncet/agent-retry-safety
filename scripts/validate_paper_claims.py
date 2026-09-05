@@ -29,6 +29,50 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def require_accounting(row: dict[str, Any], label: str) -> None:
+    trial_id = row.get("trial_id", "unknown")
+    trace = row.get("trace")
+    oracle_trace = row.get("oracle_trace")
+    require(isinstance(trace, list) and trace,
+            f"{label} trial {trial_id}: missing trace events")
+    require(isinstance(oracle_trace, list) and oracle_trace,
+            f"{label} trial {trial_id}: missing oracle trace events")
+    require(all(isinstance(event, dict) for event in trace),
+            f"{label} trial {trial_id}: malformed trace event")
+    require(all(isinstance(event, dict) for event in oracle_trace),
+            f"{label} trial {trial_id}: malformed oracle trace event")
+    require(all(isinstance(event.get("model_output"), str) for event in trace),
+            f"{label} trial {trial_id}: malformed model output")
+
+    operation_actions = {"invoke", "retry", "retry_same_key"}
+    operation_attempts = sum(
+        event.get("action") in operation_actions for event in trace
+    )
+    oracle_operation_attempts = sum(
+        event.get("event") != "status_read" for event in oracle_trace
+    )
+    status_reads = sum(
+        event.get("event") == "status_read" for event in oracle_trace
+    )
+    retries = operation_attempts - 1
+    model_calls = sum(bool(event["model_output"]) for event in trace)
+    require(operation_attempts > 0,
+            f"{label} trial {trial_id}: trace has no operation attempt")
+    require(operation_attempts == oracle_operation_attempts,
+            f"{label} trial {trial_id}: operation trace disagrees with oracle")
+    require(row["retries"] == retries,
+            f"{label} trial {trial_id}: retry count disagrees with trace")
+    require(row["status_reads"] == status_reads,
+            f"{label} trial {trial_id}: status-read count disagrees with oracle")
+    require(row["model_calls"] == model_calls,
+            f"{label} trial {trial_id}: model call count disagrees with trace")
+    require(row["calls"] == operation_attempts + status_reads,
+            f"{label} trial {trial_id}: call count disagrees with traces")
+    expected_cost = operation_attempts + 2 * status_reads + 4 * model_calls
+    require(row["cost"] == expected_cost,
+            f"{label} trial {trial_id}: cost disagrees with traces")
+
+
 TASK_CELLS = (
     (
         "payment_charge", "payment", "charge_card",
@@ -145,14 +189,7 @@ def main() -> int:
                 row["unsafe_retry"] == (row["duplicate_side_effects"] > 0),
                 f"{label} trial {row['trial_id']}: unsafe metric disagrees with duplicates",
             )
-            expected_cost = (
-                1 + row["retries"] + 2 * row["status_reads"]
-                + 4 * row["model_calls"]
-            )
-            require(
-                row["cost"] == expected_cost,
-                f"{label} trial {row['trial_id']}: cost disagrees with call counts",
-            )
+            require_accounting(row, label)
     for row in deterministic:
         unprotected_after_commit_replay = (
             row["semantics"] == "non_idempotent_mutation"
