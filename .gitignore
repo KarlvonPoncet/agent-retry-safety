@@ -30,3 +30,8 @@ retry-results*.csv
 .idea/
 .DS_Store
 *.swp
+
+# Local review surfaces and publication staging
+.lavish/
+tmp/pdfs/
+output/publication/

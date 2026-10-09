@@ -1,5 +1,21 @@
 # Publication-readiness plan
 
+## Revision status: 2026-10-09
+
+The manuscript now leads with the conformance harness and qualified null model
+pilot. It distinguishes API opacity from historical process isolation,
+deterministic mechanisms from unequal-content model prompts, and duplicate
+effects from exact state and bounded observed completion. Accounting includes
+288 model-exercised trajectories and 400 decisions. Derived analysis omits
+confidence intervals and keeps protocol variants separate; tests, claim checks,
+artifact checksums, and offline action replay pass (see `VALIDATION.md`).
+
+The phases below remain a publication roadmap, not a statement that the old
+wording issues persist. Historical isolation and missing model provenance cannot
+be repaired retrospectively. Confirmatory isolation, matched-content treatments,
+repeated model trajectories, decision-level metrics, independent review, and
+venue packaging remain future work. No new model study was run for the revision.
+
 ## Recommendation
 
 Position this as **a benchmark and measurement-method paper about agent decisions under commit ambiguity**, not a discovery of retry safety or evidence that a new prompt prevents agent failures.

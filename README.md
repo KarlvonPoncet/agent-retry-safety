@@ -2,7 +2,16 @@ A payment provider can return `timeout` after it has accepted a charge. An AI ag
 
 # Retry Safety Lab
 
-Retry Safety Lab is a small educational research simulator for that failure mode. It studies how deterministic agent/controller policies behave when a tool reports an ambiguous timeout or error around its commit point. Its deterministic state machine remains the ground truth, so the original core is reproducible and easy to inspect. The repository also contains an opaque agent benchmark that evaluates controllers against that same oracle without exposing commit truth.
+**Technical report:** Karl von Poncet, *A Conformance Harness for Agent Retry
+Decisions Under Commit Ambiguity*, version 1.0 (2026).
+[PDF](output/pdf/agent-retry-safety-report.pdf) ·
+[Evidence release](https://github.com/KarlvonPoncet/agent-retry-safety/releases/tag/paper-v1.0) ·
+[Citation metadata](CITATION.cff)
+
+The report and research artifacts use CC BY 4.0; software uses MIT. See
+[software license](LICENSE) and [research material license](paper/LICENSE.md).
+
+Retry Safety Lab is a small educational research simulator for that failure mode. It studies how deterministic agent/controller policies behave when a tool reports an ambiguous timeout or error around its commit point. Its deterministic state machine remains the ground truth, so the original core is reproducible and easy to inspect. The controller-facing benchmark API omits direct commit truth; filesystem isolation of the historical external model process was not established. The paper presents a conformance harness and an exploratory model pilot with no observed safety improvement across its prompts.
 
 ## The idea in plain language
 
@@ -161,7 +170,7 @@ Every `TrialResult` is calculated from simulator state, not judged by a language
 
 `exact_final_state_correct` and `successful_completion` are intentionally different. For example, a no-retry controller facing an after-commit failure leaves the state correct but does not know the operation completed. A blind retry can report success while leaving a non-idempotent counter at `2`, which exposes the duplicate.
 
-A **positive result** is a reproducible difference between policies, such as fewer duplicate effects for status-before-retry or idempotency-key retry than for blind retry. Report the condition and metric, not just one overall average. A **null result** means no difference was observed under the selected tools, failure schedule, and trial count; it does not prove that retries are safe in general. Increase trials, add failure schedules, or add tool semantics before drawing a stronger conclusion.
+A **positive result** is a reproducible difference between policies, such as fewer duplicate effects for status-before-retry or idempotency-key retry than for blind retry. Report the condition and metric, not just one overall average. A **null result** means no difference was observed under the selected tools, failure schedule, and trial count; it does not prove that retries are safe in general. Repeating identical deterministic conditions adds no independent evidence. Broader conclusions require meaningful new scenarios or repeated model trajectories in a defined experimental design.
 
 ### Example output
 
@@ -211,7 +220,9 @@ The tests cover before- and after-commit behavior, duplicate detection, all four
 
 ## Agent benchmark and paper
 
-The agent-facing extension is `retry_safety.agent_benchmark`. It keeps the existing `DeterministicToolSession` as the oracle and adds realistic payment, messaging, fulfillment, support, calendar, and lookup task families; matched base/paraphrased tool surface forms for every family and operation semantics; four error wordings; paired failure schedules; deterministic baselines; a rule safety wrapper; and a machine-readable commit-uncertainty/reconciliation protocol. The controller-visible adapter never returns the simulator's `committed` field. Raw final model actions and oracle traces are retained in JSON artifacts; private model reasoning is not recorded.
+The agent-facing extension is `retry_safety.agent_benchmark`. It keeps `DeterministicToolSession` as the oracle and adds synthetic payment, messaging, fulfillment, support, calendar, and lookup labels mapped to three operation semantics; matched base/paraphrased tool names; four error wordings; paired schedules; deterministic policies; and an uncertainty/reconciliation protocol. The controller-facing API omits `committed`, but this does not establish isolation of an external process. The model prompt supplies explicit semantics labels, and one error wording contains reconciliation advice. Deterministic mechanism variants execute hard-coded policies; model prompt variants differ in guidance content as well as representation. Raw final actions and oracle traces are retained; private reasoning is not recorded.
+
+Analysis outputs report finite-design counts, frequencies, and means without confidence intervals. `unsafe_retry` retains its serialized name but measures duplicate-effect incidence. `successful_completion` is observed completion within the trial budget; the harness automatically ends model trajectories on tool success or positive status. Neither field establishes an eventual-progress guarantee or independent model knowledge of completion.
 
 Run the full credential-free deterministic agent matrix and regenerate its table and SVG figure:
 
@@ -232,7 +243,16 @@ The original deterministic core matrix remains available and is used as a regres
   --csv paper/artifacts/deterministic_core.csv
 ```
 
-An LLM adapter is optional and provider-neutral. The completed single-facility run used an already authenticated Codex CLI, with schema-constrained final JSON only. It does not buy credentials or start a subscription, and no model comparison is claimed:
+Analyze the archived model pilot without credentials or fresh inference:
+
+```sh
+.venv/bin/python scripts/analyze_results.py \
+  paper/artifacts/llm_matrix.json paper/artifacts/llm_analysis
+```
+
+The pilot contains 432 configured rows: 288 model-exercised trajectories with 400 decisions, plus 144 no-failure harness controls. All recovered without duplicates, with no observed safety or completion improvement across prompts. The historical native-agent process was not demonstrably isolated from repository files, and its manifest does not preserve a pinned snapshot or complete execution settings.
+
+The optional provider-neutral adapter uses an authenticated Codex CLI and retains final JSON only. The command below performs **fresh inference** and replaces model artifacts; it reproduces the pilot mechanism, not a validated isolated study. Confirmatory runs require an isolated boundary, matched-content treatments, repeated trajectories, and recorded execution provenance. No fresh inference is needed to build or check the revised paper:
 
 ```sh
 RETRY_SAFETY_CODEX_MODEL=<authenticated-model-id> \
@@ -252,7 +272,22 @@ make -C paper
 
 The validation command checks headline denominators and results against the archived JSON; it performs no model calls.
 
-`paper/paper.md` contains the abstract, research questions and hypotheses, formal model, related work, benchmark, methods, results, error analysis, mitigation ablations, validity threats, ethics, limitations, conclusion, references, and reproducibility statement. `paper/references.json` records verification URLs and dates for every cited source. `paper/artifacts/` contains the raw manifests/traces and regenerated analysis outputs used by the paper.
+Build the publication PDF with the pinned optional dependencies:
+
+```sh
+.venv/bin/python -m pip install -e '.[paper]'
+make -C paper pdf
+```
+
+The PDF builder uses DejaVu Serif, Sans, and Sans Mono TrueType fonts. On Debian
+or Ubuntu these are provided by `fonts-dejavu-core`; on other systems set
+`RETRY_SAFETY_FONT_DIR` to a directory containing the matching `.ttf` files.
+The output is `output/pdf/agent-retry-safety-report.pdf`. The frozen PDF and
+source/evidence snapshot are attached to the `paper-v1.0` GitHub release.
+Zenodo upload instructions and prepared metadata are in
+[publication handoff](paper/PUBLISHING.md); a DOI has not yet been assigned.
+
+`paper/paper.md` contains the abstract, research questions and conformance expectations, formal model, related work, harness, methods, results, mechanism checks, validity threats, ethics, limitations, conclusion, references, and reproducibility statement. `paper/references.json` records verification URLs and dates. `paper/artifacts/` contains raw manifests/traces and regenerated analysis outputs.
 
 ## Limitations
 
@@ -268,7 +303,7 @@ Useful next experiments include:
 - richer non-idempotent effects such as append, email, shipment, and payment authorization;
 - controller policies that maintain uncertainty explicitly instead of treating every error alike;
 - broader pinned-model LLM evaluations against the same simulator, with tool traces and state as ground truth;
-- confidence intervals, cost distributions, and factorial analysis over failure rate and retry budget.
+- repeated model trajectories with paired analysis and a defined sampling population, plus cost distributions and factorial designs over failure rate and retry budget.
 
 ## Related context
 

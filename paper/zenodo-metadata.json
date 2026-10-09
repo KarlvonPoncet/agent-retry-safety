@@ -1,0 +1,33 @@
+{
+  "metadata": {
+    "upload_type": "publication",
+    "publication_type": "report",
+    "title": "A Conformance Harness for Agent Retry Decisions Under Commit Ambiguity",
+    "creators": [
+      {
+        "name": "von Poncet, Karl"
+      }
+    ],
+    "description": "<p>A transport failure can erase a tool response after the server has committed an effect. Repeating a non-idempotent operation can then create a duplicate, while declining to retry can leave completion unresolved. We present a conformance harness that separates duplicate-effect incidence, exact final state, observed completion within a trial budget, and recovery cost. Synthetic payment, messaging, fulfillment, support, calendar, and lookup labels map to three deterministic operation semantics. A controller-facing interface withholds direct commit truth, and paired failure schedules and raw traces support offline inspection and replay.</p><p>An exploratory single-model pilot found no safety or observed-completion improvement among three protocol prompts: all 288 model-exercised trajectories completed without duplicate effects, using 400 model decisions; 144 additional no-failure rows required no model decision. The historical external process was not demonstrably isolated from repository source, instructions, or oracle artifacts, so these results do not establish behavior under an isolated partial-observation boundary. The prompts also differ in guidance content, preventing a representation-only comparison. Deterministic conformance checks reproduce the expected consequences of established retry mechanisms: in non-idempotent after-commit conditions, blind replay produces duplicates, while same-key retry and authoritative reconciliation avoid them. The complete deterministic matrix has 11,520 rows, including repeated executions of identical deterministic conditions; its size measures design coverage rather than independent statistical evidence. The contribution is an inspectable measurement harness with a qualified, null model pilot, not a new retry-safety guarantee or evidence of protocol efficacy for deployed agents.\n</p>",
+    "publication_date": "2026-10-09",
+    "version": "1.0",
+    "access_right": "open",
+    "license": "cc-by-4.0",
+    "keywords": [
+      "tool-using agents",
+      "retry safety",
+      "commit ambiguity",
+      "idempotency",
+      "reconciliation",
+      "conformance testing"
+    ],
+    "related_identifiers": [
+      {
+        "identifier": "https://github.com/KarlvonPoncet/agent-retry-safety/releases/tag/paper-v1.0",
+        "relation": "isSupplementedBy",
+        "scheme": "url"
+      }
+    ],
+    "notes": "Technical report, not peer-reviewed. Historical model-process isolation was not established. The manuscript includes an AI-assistance disclosure. Research materials are CC BY 4.0; accompanying code is MIT."
+  }
+}

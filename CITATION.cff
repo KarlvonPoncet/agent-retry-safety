@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "Please cite the technical report and its frozen evidence release."
+type: software
+title: "Retry Safety Lab"
+authors:
+  - family-names: "von Poncet"
+    given-names: "Karl"
+version: "paper-v1.0"
+date-released: "2026-10-09"
+url: "https://github.com/KarlvonPoncet/agent-retry-safety"
+repository-code: "https://github.com/KarlvonPoncet/agent-retry-safety"
+license: MIT
+preferred-citation:
+  type: report
+  title: "A Conformance Harness for Agent Retry Decisions Under Commit Ambiguity"
+  authors:
+    - family-names: "von Poncet"
+      given-names: "Karl"
+  year: 2026
+  date-published: "2026-10-09"
+  version: "1.0"
+  url: "https://github.com/KarlvonPoncet/agent-retry-safety/releases/tag/paper-v1.0"
+  license: CC-BY-4.0

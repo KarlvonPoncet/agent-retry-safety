@@ -429,6 +429,14 @@ def main() -> int:
     }
     for variant, (expected, reported) in variant_costs.items():
         rows = [row for row in failure_rows if row["protocol_variant"] == variant]
+        require(len(rows) == 96, f"{variant}: expected 96 model trajectories")
+        require(
+            sum(row["model_calls"] for row in rows)
+            == {"machine_readable": 136, "natural_language": 131, "prompt_only": 133}[
+                variant
+            ],
+            f"{variant}: model decision count disagrees with the reported table",
+        )
         non_idempotent_rows = [
             row for row in rows if row["semantics"] == "non_idempotent_mutation"
         ]

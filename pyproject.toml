@@ -18,6 +18,10 @@ dev = [
   "pytest-cov>=5.0",
   "ruff>=0.6",
 ]
+paper = [
+  "reportlab==5.0.1",
+  "pypdf==6.20.0",
+]
 ui = [
   "streamlit>=1.36",
   "pandas>=2.0",

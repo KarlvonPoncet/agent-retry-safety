@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import csv
+import html
 import json
-import math
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from pathlib import Path
@@ -21,29 +21,11 @@ DEFAULT_GROUP_FIELDS = (
 )
 
 
-def wilson_interval(
-    successes: int, trials: int, z: float = 1.96
-) -> tuple[float, float]:
-    """Return a two-sided Wilson interval for a binomial proportion."""
-
-    if trials <= 0:
-        return 0.0, 0.0
-    p = successes / trials
-    denominator = 1 + z * z / trials
-    center = (p + z * z / (2 * trials)) / denominator
-    margin = (
-        z
-        * math.sqrt((p * (1 - p) + z * z / (4 * trials)) / trials)
-        / denominator
-    )
-    return max(0.0, center - margin), min(1.0, center + margin)
-
-
 def summarize_rows(
     rows: Iterable[Mapping[str, Any]],
     group_fields: tuple[str, ...] = DEFAULT_GROUP_FIELDS,
 ) -> list[dict[str, Any]]:
-    """Summarize raw trial rows with Wilson intervals and means."""
+    """Report finite-design counts and means without sampling assumptions."""
 
     groups: dict[tuple[Any, ...], list[Mapping[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -54,20 +36,14 @@ def summarize_rows(
         unsafe = sum(bool(row["unsafe_retry"]) for row in group)
         completion = sum(bool(row["successful_completion"]) for row in group)
         exact = sum(bool(row["exact_final_state_correct"]) for row in group)
-        unsafe_low, unsafe_high = wilson_interval(unsafe, n)
-        completion_low, completion_high = wilson_interval(completion, n)
         summaries.append(
             {
                 **dict(zip(group_fields, key)),
                 "trials": n,
                 "unsafe_retries": unsafe,
                 "unsafe_retry_rate": unsafe / n,
-                "unsafe_retry_ci_low": unsafe_low,
-                "unsafe_retry_ci_high": unsafe_high,
                 "successful_completions": completion,
                 "successful_completion_rate": completion / n,
-                "completion_ci_low": completion_low,
-                "completion_ci_high": completion_high,
                 "exact_final_states": exact,
                 "exact_final_state_rate": exact / n,
                 "mean_duplicate_side_effects": sum(
@@ -115,39 +91,42 @@ def write_unsafe_retry_svg(
         if row.get("failure_phase") == "after_commit"
         and row.get("semantics") == "non_idempotent_mutation"
     ]
-    grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for row in selected:
-        grouped[str(row["controller"])].append(row)
+        grouped[(str(row["controller"]), str(row["protocol_variant"]))].append(row)
     values = {
         key: sum(bool(row["unsafe_retry"]) for row in value) / len(value)
         for key, value in grouped.items()
         if value
     }
-    width, height = 760, 390
-    chart_left, chart_top, chart_width, chart_height = 70, 35, 650, 270
+    width, height = 1040, 470
+    chart_left, chart_top, chart_width, chart_height = 70, 35, 930, 270
     bar_width = chart_width / max(1, len(values)) * 0.7
     svg: list[str] = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" ',
-        'viewBox="0 0 760 390">',
+        'viewBox="0 0 1040 470" role="img" '
+        'aria-label="Duplicate-effect frequency by controller and variant">',
         "<style>text{font:12px sans-serif;fill:#222}"
         ".title{font-size:16px;font-weight:bold}"
         ".bar{fill:#34699a}.axis{stroke:#333;stroke-width:1}</style>",
-        '<text x="70" y="22" class="title">Unsafe retry rate after commit '
+        '<text x="70" y="22" class="title">Duplicate-effect frequency after commit '
         "(non-idempotent tasks)</text>",
     ]
     for tick in range(0, 6):
         y = chart_top + chart_height - (tick / 5) * chart_height
         value = tick / 5
         svg.append(
-            f'<line x1="{chart_left}" y1="{y:.1f}" x2="720" '
+            f'<line x1="{chart_left}" y1="{y:.1f}" x2="1000" '
             f'y2="{y:.1f}" stroke="#ddd"/>'
         )
         svg.append(f'<text x="38" y="{y + 4:.1f}">{value:.1f}</text>')
     svg.append(
         f'<line class="axis" x1="{chart_left}" y1="{chart_top + chart_height}" '
-        f'x2="720" y2="{chart_top + chart_height}"/>'
+        f'x2="1000" y2="{chart_top + chart_height}"/>'
     )
-    for index, (label, value) in enumerate(sorted(values.items())):
+    for index, ((controller, variant), value) in enumerate(sorted(values.items())):
+        label = html.escape(controller.replace("_", " "))
+        variant_label = html.escape(variant.replace("_", " "))
         x = chart_left + index * (chart_width / max(1, len(values))) + 10
         bar_height = value * chart_height
         y = chart_top + chart_height - bar_height
@@ -156,7 +135,7 @@ def write_unsafe_retry_svg(
             f'height="{bar_height:.1f}"/><text x="{x:.1f}" '
             f'y="{chart_top + chart_height + 18}" '
             f'transform="rotate(25 {x:.1f} {chart_top + chart_height + 18})">'
-            f"{label}</text>"
+            f'{label}<tspan x="{x:.1f}" dy="15">{variant_label}</tspan></text>'
         )
         svg.append(
             f'<text x="{x + bar_width / 3:.1f}" y="{y - 5:.1f}">'
@@ -164,8 +143,8 @@ def write_unsafe_retry_svg(
         )
     svg.append(
         '<text x="10" y="175" transform="rotate(-90 10 175)">rate</text>'
-        '<text x="300" y="375">controller (95% intervals are in '
-        'summary.csv)</text></svg>'
+        '<text x="300" y="450">controller and variant '
+        '(finite-design counts in summary.csv; no confidence intervals)</text></svg>'
     )
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
